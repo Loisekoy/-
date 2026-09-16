@@ -1821,6 +1821,525 @@ select:focus {
   gap: 8px;
 }
 
+.exercise-detail-panel {
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.exercise-detail-panel summary {
+  padding: 13px 15px;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.exercise-detail-panel[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.exercise-detail-panel__content {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.42fr) minmax(0, 1fr);
+  gap: 18px;
+  padding: 15px;
+}
+
+.exercise-demo-frame {
+  position: relative;
+  overflow: hidden;
+  min-height: 180px;
+  background: #fff;
+}
+
+.exercise-demo-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.exercise-demo-frame span,
+.admin-exercise-card__media span {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgb(7 24 45 / 88%);
+  color: #fff;
+  padding: 6px 8px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.exercise-detail-copy {
+  min-width: 0;
+}
+
+.exercise-muscle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.exercise-muscle-grid > div {
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 12px;
+}
+
+.exercise-muscle-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.exercise-muscle-grid p {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.exercise-detail-copy ol,
+.active-exercise-guidance ol,
+.admin-instruction-list {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.7;
+}
+
+.exercise-detail-copy > p {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+
+.active-exercise-guidance__wide {
+  grid-column: 1 / -1;
+}
+
+.admin-login-page {
+  display: grid;
+  flex: 1;
+  min-height: calc(100vh - 77px);
+  place-items: center;
+  padding: 48px 24px;
+  background:
+    radial-gradient(circle at top left, rgb(199 255 56 / 24%), transparent 35%),
+    linear-gradient(135deg, var(--ink), #0b2340);
+}
+
+.admin-login-card {
+  width: min(100%, 560px);
+  border: 1px solid rgb(255 255 255 / 18%);
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 30px 80px rgb(0 0 0 / 28%);
+  padding: clamp(28px, 5vw, 46px);
+}
+
+.admin-login-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 22px;
+  background: var(--ink);
+  color: #fff;
+  padding: 8px 11px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-login-card h1 {
+  margin-bottom: 12px;
+  font-size: clamp(3rem, 7vw, 5rem);
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.admin-login-card p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.admin-login-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.admin-login-card__back,
+.admin-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 18px;
+  color: var(--blue);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.app-nav__button {
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--danger);
+  padding: 0 16px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.admin-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-bottom: 38px;
+  background: var(--line);
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-metric-card {
+  min-width: 0;
+  background: #fff;
+  padding: 20px;
+}
+
+.admin-metric-card span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.admin-metric-card strong {
+  display: block;
+  margin-top: 12px;
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: clamp(2.6rem, 5vw, 4.7rem);
+  line-height: 0.9;
+}
+
+.admin-metric-card small {
+  margin-left: 6px;
+  color: var(--muted);
+  font-family: Inter, sans-serif;
+  font-size: 0.78rem;
+}
+
+.admin-dashboard-grid,
+.admin-detail-grid,
+.admin-chart-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 28px;
+  margin-bottom: 34px;
+}
+
+.admin-card {
+  min-width: 0;
+  border-top: 1px solid var(--ink);
+  background: #fff;
+  padding-top: 18px;
+}
+
+.admin-card--table {
+  margin-top: 24px;
+}
+
+.admin-definition-list {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  background: var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-definition-list div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.45fr) minmax(0, 1fr);
+  gap: 12px;
+  background: #fff;
+  padding: 12px;
+}
+
+.admin-definition-list dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.admin-definition-list dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.admin-table,
+.admin-users-table {
+  min-width: 0;
+  border-top: 1px solid var(--line);
+}
+
+.admin-table__header,
+.admin-table__row,
+.admin-users-table__header,
+.admin-users-table__row {
+  display: grid;
+  gap: 14px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 4px;
+  font-size: 0.76rem;
+}
+
+.admin-table__header,
+.admin-users-table__header {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.admin-table__row:hover,
+.admin-users-table__row:hover {
+  background: var(--surface-soft);
+}
+
+.admin-table__header,
+.admin-table__row {
+  grid-template-columns: minmax(150px, 1.2fr) minmax(100px, 0.8fr) minmax(90px, 0.7fr) minmax(90px, 0.7fr) minmax(140px, 1fr);
+}
+
+.admin-dashboard-grid .admin-table__header,
+.admin-dashboard-grid .admin-table__row {
+  grid-template-columns: minmax(130px, 1fr) minmax(130px, 1fr) minmax(90px, 0.8fr) minmax(100px, 0.8fr);
+}
+
+.admin-users-table__header,
+.admin-users-table__row {
+  grid-template-columns: minmax(180px, 1.2fr) minmax(130px, 0.9fr) minmax(105px, 0.7fr) minmax(130px, 0.8fr) minmax(170px, 1fr) minmax(100px, 0.7fr);
+}
+
+.admin-users-table__row strong {
+  display: block;
+}
+
+.admin-users-table__row small,
+.admin-table__row time,
+.admin-table__row span,
+.admin-users-table__row time,
+.admin-users-table__row span {
+  color: var(--muted);
+}
+
+.admin-empty,
+.admin-empty-chart {
+  margin: 0;
+  background: var(--surface-soft);
+  color: var(--muted);
+  padding: 18px;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.admin-empty-chart {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  text-align: center;
+}
+
+.admin-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 0.35fr) minmax(150px, 0.35fr) minmax(150px, 0.35fr);
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 22px;
+}
+
+.admin-filter-bar > label:not(.search-field) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-filter-bar > label > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.admin-pagination span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.admin-chip-row {
+  margin-top: 16px;
+}
+
+.admin-mini-list {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+}
+
+.admin-mini-list > div {
+  display: grid;
+  grid-template-columns: 110px 90px 1fr;
+  gap: 12px;
+  background: #fff;
+  padding: 12px;
+  font-size: 0.78rem;
+}
+
+.admin-mini-list time,
+.admin-mini-list span {
+  color: var(--muted);
+}
+
+.admin-plan-list {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-plan-list > article {
+  border: 1px solid var(--line);
+  padding: 18px;
+}
+
+.admin-plan-list h3 {
+  margin-bottom: 3px;
+  font-size: 2rem;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.admin-plan-list p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.admin-plan-days {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.admin-plan-days > div {
+  min-width: 0;
+  background: var(--surface-soft);
+  padding: 14px;
+}
+
+.admin-plan-days ul {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-plan-days li {
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  font-size: 0.76rem;
+}
+
+.admin-plan-days img {
+  width: 42px;
+  height: 42px;
+  object-fit: cover;
+  background: #fff;
+}
+
+.admin-plan-days small {
+  color: var(--muted);
+}
+
+.admin-chart-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-chart-panel {
+  min-height: 360px;
+}
+
+.admin-exercise-grid {
+  display: grid;
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.admin-exercise-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.35fr) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: 0 14px 35px rgb(7 24 45 / 6%);
+}
+
+.admin-exercise-card__media {
+  position: relative;
+  min-height: 260px;
+  background: var(--surface-soft);
+}
+
+.admin-exercise-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-exercise-card__body {
+  min-width: 0;
+  padding: 22px;
+}
+
+.admin-instruction-list {
+  margin-top: 14px;
+}
+
 .database-hero {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2189,11 +2708,15 @@ select:focus {
 
   .dashboard-profile-band,
   .exercise-library-layout,
-  .schema-grid {
+  .schema-grid,
+  .admin-dashboard-grid,
+  .admin-detail-grid,
+  .admin-chart-grid {
     grid-template-columns: 1fr 1fr;
   }
 
   .plan-exercise-card,
+  .admin-exercise-card,
   .sql-example {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2208,6 +2731,22 @@ select:focus {
 
   .exercise-filters {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-filter-bar,
+  .admin-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-users-table__header,
+  .admin-users-table__row {
+    grid-template-columns: minmax(170px, 1.2fr) minmax(120px, 0.9fr) minmax(120px, 1fr);
+  }
+
+  .admin-users-table__header span:nth-child(n+4),
+  .admin-users-table__row > span:nth-child(n+4),
+  .admin-users-table__row > time {
+    display: none;
   }
 }
 
@@ -2240,9 +2779,13 @@ select:focus {
     left: 0;
     display: grid;
     height: 66px;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
     border-top: 1px solid var(--line);
     background: #fff;
+  }
+
+  .app-nav--admin {
+    grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
   }
 
   .app-nav__link {
@@ -2263,6 +2806,12 @@ select:focus {
     bottom: auto;
     left: 12px;
     height: 3px;
+  }
+
+  .app-nav__button {
+    border-left: 1px solid var(--line);
+    padding: 6px 4px;
+    font-size: 0.62rem;
   }
 
   .page,
@@ -2372,7 +2921,42 @@ select:focus {
   .today-brief,
   .current-exercise,
   .exercise-guidance-grid,
-  .active-exercise-guidance {
+  .active-exercise-guidance,
+  .exercise-detail-panel__content,
+  .exercise-muscle-grid,
+  .admin-dashboard-grid,
+  .admin-detail-grid,
+  .admin-chart-grid,
+  .admin-plan-days,
+  .admin-exercise-card {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-metric-grid,
+  .admin-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-table__header,
+  .admin-users-table__header {
+    display: none;
+  }
+
+  .admin-table__row,
+  .admin-users-table__row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 14px 2px;
+  }
+
+  .admin-users-table__row > span:nth-child(n+4),
+  .admin-users-table__row > time {
+    display: block;
+  }
+
+  .admin-mini-list > div,
+  .admin-definition-list div,
+  .admin-plan-days li {
     grid-template-columns: 1fr;
   }
 

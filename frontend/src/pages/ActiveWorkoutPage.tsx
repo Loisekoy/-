@@ -10,8 +10,10 @@ import { parseApiDate } from '../lib/datetime'
 import {
   getExerciseCues,
   getExerciseImageSrc,
+  getExerciseInstructions,
   getExerciseObjective,
   getIntensityTip,
+  getPrimaryMuscles,
 } from '../lib/exerciseGuidance'
 import { getUserId } from '../lib/storage'
 
@@ -119,6 +121,8 @@ export default function ActiveWorkoutPage() {
   const totalTargetSets = day.exercises.reduce((total, item) => total + item.target_sets, 0)
   const progress = Math.round(((exerciseIndex + 1) / day.exercises.length) * 100)
   const nextExercise = day.exercises[exerciseIndex + 1]
+  const currentInstructions = getExerciseInstructions(currentExercise.exercise)
+  const primaryMuscles = getPrimaryMuscles(currentExercise.exercise)
 
   function updateDraft(index: number, field: 'weight' | 'reps', value: string) {
     setDrafts((current) => current.map((draft, draftIndex) => (
@@ -216,6 +220,7 @@ export default function ActiveWorkoutPage() {
           <p>{getExerciseObjective(currentExercise.exercise)}</p>
           <div className="active-exercise-tags">
             <span>{currentExercise.exercise.body_part.name_zh} / {currentExercise.exercise.body_part.name_en}</span>
+            <span>Target: {primaryMuscles.join(', ')}</span>
             <span>{currentExercise.exercise.equipment}</span>
             <span>{currentExercise.exercise.difficulty_level}</span>
           </div>
@@ -229,6 +234,14 @@ export default function ActiveWorkoutPage() {
               <ul>
                 {getExerciseCues(currentExercise.exercise).map((cue) => <li key={cue}>{cue}</li>)}
               </ul>
+            </div>
+            <div className="active-exercise-guidance__wide">
+              <strong>操作步驟</strong>
+              <ol>
+                {currentInstructions.map((instruction) => (
+                  <li key={instruction}>{instruction}</li>
+                ))}
+              </ol>
             </div>
           </div>
         </div>

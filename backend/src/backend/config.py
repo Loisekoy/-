@@ -11,6 +11,13 @@ class Settings(BaseSettings):
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
     frontend_url: str = Field(default="http://localhost:5173", alias="FRONTEND_URL")
     frontend_dist_dir: str | None = Field(default=None, alias="FRONTEND_DIST_DIR")
+    secret_key: str = Field(default="dev-only-change-me", alias="SECRET_KEY")
+    admin_bootstrap_username: str = Field(default="admin", alias="ADMIN_BOOTSTRAP_USERNAME")
+    admin_bootstrap_password: str | None = Field(default=None, alias="ADMIN_BOOTSTRAP_PASSWORD")
+    exercisedb_api_url: str = Field(
+        default="https://oss.exercisedb.dev/api/v1/exercises", alias="EXERCISEDB_API_URL"
+    )
+    exercisedb_sync_on_seed: bool = Field(default=False, alias="EXERCISEDB_SYNC_ON_SEED")
 
     model_config = SettingsConfigDict(
         env_file=".env",

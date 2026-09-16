@@ -1,3 +1,5 @@
+import { getAdminToken } from '../lib/storage'
+
 const API_URL = import.meta.env.VITE_API_URL ?? '/api'
 
 export class ApiError extends Error {
@@ -34,4 +36,15 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
     return undefined as T
   }
   return (await response.json()) as T
+}
+
+export async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAdminToken()
+  return apiRequest<T>(path, {
+    ...init,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init?.headers,
+    },
+  })
 }

@@ -137,3 +137,82 @@ FROM body_records
 WHERE user_id = :user_id
 ORDER BY recorded_on;
 ```
+
+## 8. Admin Dashboard Metrics
+
+```sql
+SELECT COUNT(*) AS total_users
+FROM users;
+
+SELECT COUNT(*) AS total_workout_plans
+FROM workout_plans;
+
+SELECT
+    AVG(age) AS average_age,
+    AVG(training_days_per_week) AS average_training_days
+FROM users;
+
+SELECT
+    COALESCE(SUM(wset.weight_kg * wset.reps), 0) AS total_training_volume
+FROM workout_sets AS wset
+JOIN workout_sessions AS ws
+  ON ws.session_id = wset.session_id
+WHERE ws.status = 'completed'
+  AND wset.is_warmup = FALSE;
+```
+
+## 9. Admin User List Search / Filter / Sort
+
+```sql
+SELECT
+    u.user_id,
+    u.name,
+    tg.goal_name,
+    u.training_experience,
+    u.training_days_per_week,
+    u.training_duration_minutes,
+    MAX(br.recorded_on) AS latest_recorded_on
+FROM users AS u
+JOIN training_goals AS tg
+  ON tg.training_goal_id = u.training_goal_id
+LEFT JOIN body_records AS br
+  ON br.user_id = u.user_id
+WHERE u.name ILIKE :search
+   OR CAST(u.user_id AS TEXT) ILIKE :search
+GROUP BY
+    u.user_id,
+    u.name,
+    tg.goal_name,
+    u.training_experience,
+    u.training_days_per_week,
+    u.training_duration_minutes
+ORDER BY u.created_at DESC
+LIMIT :page_size OFFSET :offset;
+```
+
+## 10. Admin Statistics: Users by Goal
+
+```sql
+SELECT
+    tg.goal_name,
+    COUNT(u.user_id) AS user_count
+FROM training_goals AS tg
+LEFT JOIN users AS u
+  ON u.training_goal_id = tg.training_goal_id
+GROUP BY tg.training_goal_id, tg.goal_name
+ORDER BY tg.training_goal_id;
+```
+
+## 11. Admin Statistics: Most Selected Body Parts
+
+```sql
+SELECT
+    bp.name_en,
+    COUNT(ubp.user_id) AS selected_count
+FROM body_parts AS bp
+JOIN user_body_parts AS ubp
+  ON ubp.body_part_id = bp.body_part_id
+GROUP BY bp.body_part_id, bp.name_en, bp.display_order
+ORDER BY selected_count DESC, bp.display_order
+LIMIT 8;
+```

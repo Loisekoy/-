@@ -1,8 +1,14 @@
+import json
+import urllib.error
+import urllib.request
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.config import get_settings
 from backend.database import get_session_factory
-from backend.models import BodyPart, Exercise, TrainingGoal
+from backend.models import Admin, BodyPart, Exercise, TrainingGoal
+from backend.security import hash_password
 
 GOALS = [
     (1, "muscle_gain", "增肌", "增加肌肉量與每週訓練量", 3, 10, 75),
@@ -31,6 +37,81 @@ BODY_PART_IMAGE_URLS = {
     "legs": "/exercise-images/legs.svg",
     "glutes": "/exercise-images/glutes.svg",
     "core": "/exercise-images/core.svg",
+}
+
+FALLBACK_DETAIL_BY_BODY_PART = {
+    "chest": {
+        "target_muscles": ["pectorals"],
+        "secondary_muscles": ["triceps", "shoulders"],
+        "instructions": [
+            "Set your shoulder blades back and down before the press.",
+            "Lower the weight under control toward the chest line.",
+            "Press back to the start while keeping your elbows stable.",
+        ],
+    },
+    "back": {
+        "target_muscles": ["latissimus dorsi", "middle back"],
+        "secondary_muscles": ["biceps", "rear delts"],
+        "instructions": [
+            "Start each pull by moving the shoulder blades down and back.",
+            "Pull with your elbows instead of only your hands.",
+            "Return the weight slowly and keep your torso controlled.",
+        ],
+    },
+    "shoulders": {
+        "target_muscles": ["deltoids"],
+        "secondary_muscles": ["triceps", "upper traps"],
+        "instructions": [
+            "Brace your core and keep the ribs down.",
+            "Move the weight through a smooth, pain-free range of motion.",
+            "Avoid shrugging at the top of each repetition.",
+        ],
+    },
+    "biceps": {
+        "target_muscles": ["biceps"],
+        "secondary_muscles": ["forearms"],
+        "instructions": [
+            "Keep your elbows close to your sides.",
+            "Curl the weight without swinging your torso.",
+            "Lower slowly until the arms are nearly straight.",
+        ],
+    },
+    "triceps": {
+        "target_muscles": ["triceps"],
+        "secondary_muscles": ["shoulders"],
+        "instructions": [
+            "Keep the upper arms stable.",
+            "Extend through the elbows until the arms are straight.",
+            "Pause briefly and control the return.",
+        ],
+    },
+    "legs": {
+        "target_muscles": ["quadriceps", "hamstrings"],
+        "secondary_muscles": ["glutes", "calves"],
+        "instructions": [
+            "Plant your feet firmly before each repetition.",
+            "Keep the knees tracking in the same direction as the toes.",
+            "Move through a controlled range without bouncing.",
+        ],
+    },
+    "glutes": {
+        "target_muscles": ["glutes"],
+        "secondary_muscles": ["hamstrings", "core"],
+        "instructions": [
+            "Brace the core before initiating the hip movement.",
+            "Drive through the hips and squeeze the glutes at the top.",
+            "Avoid over-arching the lower back.",
+        ],
+    },
+    "core": {
+        "target_muscles": ["abdominals"],
+        "secondary_muscles": ["hip flexors", "lower back"],
+        "instructions": [
+            "Brace your trunk as if preparing for a light punch.",
+            "Keep the spine neutral and breathe steadily.",
+            "Stop if you feel sharp lower-back pain.",
+        ],
+    },
 }
 
 EXERCISES = [
@@ -81,6 +162,74 @@ EXERCISES = [
     ("Hanging Leg Raise", "core", "advanced", "bodyweight", "compound", "懸垂抬腿。"),
 ]
 
+EXERCISEDB_NAME_ALIASES = {
+    "Bench Press": "barbell bench press",
+    "Barbell Squat": "barbell squat",
+    "Lat Pulldown": "cable lat pulldown",
+    "Seated Cable Row": "cable seated row",
+    "Dumbbell Curl": "dumbbell bicep curl",
+    "Hammer Curl": "dumbbell hammer curl",
+    "Triceps Pushdown": "cable triceps pushdown",
+    "Push-Up": "push-up",
+    "Pull-Up": "pull-up",
+    "Plank": "front plank",
+}
+
+
+def _normalize_name(value: str) -> str:
+    return " ".join(value.lower().replace("-", " ").split())
+
+
+def _fetch_exercisedb_catalogue() -> list[dict]:
+    settings = get_settings()
+    request = urllib.request.Request(
+        settings.exercisedb_api_url,
+        headers={"User-Agent": "fitness-tracking-management-system/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=10) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    return []
+
+
+def _apply_exercisedb_details(db: Session) -> None:
+    try:
+        catalogue = _fetch_exercisedb_catalogue()
+    except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        return
+    by_name = {_normalize_name(str(item.get("name", ""))): item for item in catalogue}
+    exercises = db.scalars(select(Exercise)).all()
+    for exercise in exercises:
+        lookup_name = EXERCISEDB_NAME_ALIASES.get(exercise.exercise_name, exercise.exercise_name)
+        match = by_name.get(_normalize_name(lookup_name))
+        if match is None:
+            continue
+        exercise.external_exercise_id = match.get("exerciseId") or exercise.external_exercise_id
+        exercise.gif_url = match.get("gifUrl") or exercise.gif_url
+        exercise.target_muscles = match.get("targetMuscles") or exercise.target_muscles
+        exercise.secondary_muscles = (
+            match.get("secondaryMuscles") or exercise.secondary_muscles
+        )
+        exercise.instructions = match.get("instructions") or exercise.instructions
+
+
+def _seed_admin(db: Session) -> None:
+    settings = get_settings()
+    if not settings.admin_bootstrap_password:
+        return
+    username = settings.admin_bootstrap_username.strip()
+    admin = db.scalar(select(Admin).where(Admin.username == username))
+    password_hash = hash_password(settings.admin_bootstrap_password)
+    if admin is None:
+        db.add(Admin(username=username, password_hash=password_hash))
+    else:
+        admin.password_hash = password_hash
+        admin.is_active = True
+
 
 def seed_database(db: Session) -> None:
     existing_goal_codes = set(db.scalars(select(TrainingGoal.goal_code)).all())
@@ -118,6 +267,7 @@ def seed_database(db: Session) -> None:
     }
     for name, part_code, difficulty, equipment, movement, description in EXERCISES:
         image_url = BODY_PART_IMAGE_URLS[part_code]
+        fallback_detail = FALLBACK_DETAIL_BY_BODY_PART[part_code]
         existing_exercise = existing_exercises.get(name)
         if existing_exercise is None:
             db.add(
@@ -129,10 +279,25 @@ def seed_database(db: Session) -> None:
                     movement_type=movement,
                     description=description,
                     image_url=image_url,
+                    target_muscles=fallback_detail["target_muscles"],
+                    secondary_muscles=fallback_detail["secondary_muscles"],
+                    instructions=fallback_detail["instructions"],
                 )
             )
         else:
             existing_exercise.image_url = existing_exercise.image_url or image_url
+            existing_exercise.target_muscles = (
+                existing_exercise.target_muscles or fallback_detail["target_muscles"]
+            )
+            existing_exercise.secondary_muscles = (
+                existing_exercise.secondary_muscles or fallback_detail["secondary_muscles"]
+            )
+            existing_exercise.instructions = (
+                existing_exercise.instructions or fallback_detail["instructions"]
+            )
+    if get_settings().exercisedb_sync_on_seed:
+        _apply_exercisedb_details(db)
+    _seed_admin(db)
     db.commit()
 
 

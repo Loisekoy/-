@@ -3,6 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -32,6 +33,23 @@ BIGINT_PK = BigInteger().with_variant(Integer, "sqlite")
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class Admin(Base, TimestampMixin):
+    __tablename__ = "admins"
+    __table_args__ = (
+        CheckConstraint("length(username) >= 3", name="ck_admin_username_length"),
+        Index("ix_admins_username", "username", unique=True),
+    )
+
+    admin_id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(80), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
 
@@ -149,6 +167,17 @@ class Exercise(Base, TimestampMixin):
     movement_type: Mapped[str] = mapped_column(String(20), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(255))
+    external_exercise_id: Mapped[str | None] = mapped_column(String(80), unique=True)
+    gif_url: Mapped[str | None] = mapped_column(String(500))
+    target_muscles: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default=text("'[]'"), nullable=False
+    )
+    secondary_muscles: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default=text("'[]'"), nullable=False
+    )
+    instructions: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default=text("'[]'"), nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

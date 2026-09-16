@@ -34,7 +34,22 @@ const BODY_PART_CUES: Record<string, string[]> = {
 }
 
 export function getExerciseImageSrc(exercise: Exercise): string {
-  return exercise.image_url ?? FALLBACK_IMAGES[exercise.body_part.body_part_code] ?? '/exercise-images/core.svg'
+  return (
+    exercise.gif_url ??
+    exercise.image_url ??
+    FALLBACK_IMAGES[exercise.body_part.body_part_code] ??
+    '/exercise-images/core.svg'
+  )
+}
+
+export function getExerciseInstructions(exercise: Exercise): string[] {
+  return exercise.instructions.length > 0 ? exercise.instructions : getExerciseCues(exercise)
+}
+
+export function getPrimaryMuscles(exercise: Exercise): string[] {
+  return exercise.target_muscles.length > 0
+    ? exercise.target_muscles
+    : [exercise.body_part.name_en]
 }
 
 export function getExerciseObjective(exercise: Exercise): string {

@@ -6,11 +6,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from backend.database import get_db
-from backend.models import BodyPart, Exercise, PlanExercise, WorkoutSet
+from backend.dependencies import get_current_admin
+from backend.models import Admin, BodyPart, Exercise, PlanExercise, WorkoutSet
 from backend.schemas import ExerciseCreate, ExerciseRead, ExerciseUpdate
 
 router = APIRouter(prefix="/exercises", tags=["exercises"])
 SessionDep = Annotated[Session, Depends(get_db)]
+CurrentAdminDep = Annotated[Admin, Depends(get_current_admin)]
 
 
 def _get_exercise(db: Session, exercise_id: int) -> Exercise:
@@ -25,7 +27,7 @@ def _get_exercise(db: Session, exercise_id: int) -> Exercise:
 
 
 @router.post("", response_model=ExerciseRead, status_code=status.HTTP_201_CREATED)
-def create_exercise(payload: ExerciseCreate, db: SessionDep) -> Exercise:
+def create_exercise(payload: ExerciseCreate, db: SessionDep, _admin: CurrentAdminDep) -> Exercise:
     if db.get(BodyPart, payload.body_part_id) is None:
         raise HTTPException(status_code=422, detail="Invalid body part")
     exercise = Exercise(**payload.model_dump())
@@ -40,7 +42,9 @@ def create_exercise(payload: ExerciseCreate, db: SessionDep) -> Exercise:
 
 
 @router.patch("/{exercise_id}", response_model=ExerciseRead)
-def update_exercise(exercise_id: int, payload: ExerciseUpdate, db: SessionDep) -> Exercise:
+def update_exercise(
+    exercise_id: int, payload: ExerciseUpdate, db: SessionDep, _admin: CurrentAdminDep
+) -> Exercise:
     exercise = _get_exercise(db, exercise_id)
     changes = payload.model_dump(exclude_unset=True)
     if "body_part_id" in changes and db.get(BodyPart, changes["body_part_id"]) is None:
@@ -58,7 +62,7 @@ def update_exercise(exercise_id: int, payload: ExerciseUpdate, db: SessionDep) -
 
 
 @router.delete("/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_exercise(exercise_id: int, db: SessionDep) -> Response:
+def delete_exercise(exercise_id: int, db: SessionDep, _admin: CurrentAdminDep) -> Response:
     exercise = _get_exercise(db, exercise_id)
     plan_refs = db.scalar(
         select(func.count())

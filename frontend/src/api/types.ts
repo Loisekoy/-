@@ -25,6 +25,11 @@ export interface Exercise {
   movement_type: string
   description: string
   image_url: string | null
+  external_exercise_id: string | null
+  gif_url: string | null
+  target_muscles: string[]
+  secondary_muscles: string[]
+  instructions: string[]
   is_active: boolean
 }
 
@@ -165,4 +170,92 @@ export interface DatabaseOverview {
   relationships: DatabaseRelationship[]
   query_examples: DatabaseQueryExample[]
   normalization_notes: string[]
+}
+
+export interface Admin {
+  admin_id: number
+  username: string
+  is_active: boolean
+  created_at: string
+  last_login_at: string | null
+}
+
+export interface AdminLoginResponse {
+  access_token: string
+  token_type: 'bearer'
+  admin: Admin
+}
+
+export interface AdminDashboard {
+  total_users: number
+  new_users_today: number
+  total_workouts: number
+  total_workout_plans: number
+  average_age: number | null
+  average_training_days: number | null
+  total_training_volume: number
+  recent_users: Array<{
+    user_id: string
+    name: string
+    age: number
+    goal: string
+    experience: string
+    joined: string
+  }>
+}
+
+export interface AdminUserListItem {
+  user_id: string
+  name: string
+  gender: string | null
+  age: number
+  height_cm: string
+  latest_weight_kg: string | null
+  training_goal: string
+  training_experience: string
+  training_days_per_week: number
+  training_duration_minutes: number
+  preferred_body_parts: string[]
+  created_at: string
+}
+
+export interface PaginatedAdminUsers {
+  items: AdminUserListItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface AdminWorkoutSessionSummary {
+  session_id: number
+  session_name: string
+  status: string
+  started_at: string
+  ended_at: string | null
+  set_count: number
+  volume_kg: number
+}
+
+export interface AdminUserDetail {
+  profile: Profile
+  workout_plans: Array<{
+    plan_id: number
+    plan_name: string
+    status: string
+    generated_at: string
+    days: PlanDay[]
+  }>
+  workout_history: AdminWorkoutSessionSummary[]
+  weight_history: BodyRecord[]
+}
+
+export interface AdminStatistics {
+  total_users: number
+  users_by_training_goal: MetricPoint[]
+  users_by_experience_level: MetricPoint[]
+  most_selected_body_parts: MetricPoint[]
+  most_popular_exercises: MetricPoint[]
+  average_training_days_per_week: number | null
+  total_workout_sessions: number
+  total_training_volume: number
 }

@@ -9,6 +9,9 @@ from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
+os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("ADMIN_BOOTSTRAP_USERNAME", "admin")
+os.environ.setdefault("ADMIN_BOOTSTRAP_PASSWORD", "admin-test-password")
 
 from backend.database import get_db  # noqa: E402
 from backend.main import create_app  # noqa: E402

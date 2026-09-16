@@ -2,7 +2,7 @@
 
 免登入的全端健身紀錄管理系統。訪客可直接建立匿名基本資料，選擇訓練目標與重點部位，取得規則式推薦課表，記錄每一組 Weight / Reps，並透過 Dashboard 查看 Training Volume、訓練頻率與體重歷史。
 
-> 本專案依需求刻意不提供 Login、Register、Email 或 Password。瀏覽器只保存匿名 `user_id`；清除瀏覽器資料後無法復原識別碼。這是課程展示系統，不適合存放敏感個資。
+> Public user website 依需求刻意不提供 Login、Register、Email 或 Password。瀏覽器只保存匿名 `user_id`；清除瀏覽器資料後無法復原識別碼。管理者後台 `/admin` 是獨立入口，使用雲端環境變數建立的 admin 帳號與 hashed password，不會把密碼寫入前端或 GitHub。
 
 ## Project Description
 
@@ -14,9 +14,10 @@
 - Workout Session 與每組 Weight / Reps 紀錄
 - Workout、Exercise、Body Weight History
 - Dashboard：Training Volume、工作組數、訓練次數、最常訓練部位與最常使用動作
-- Exercises 搜尋、篩選、參考圖片與完整 CRUD API
+- Exercise detail：資料庫可保存 GIF/image、target muscles、secondary muscles 與 step-by-step instructions；若 ExerciseDB API 不可用會使用本地 fallback 圖片與動作說明
+- Admin Backend：`/admin/login`、Dashboard、Users、User Detail、Statistics、Exercise Database
 - Database System 展示頁：Schema、PK/FK、Relationships、row counts、JOIN / GROUP BY / Aggregate 查詢結果
-- 使用者、體重、課表、訓練紀錄的 CRUD API
+- 使用者、體重、課表、訓練紀錄的 CRUD API；Exercise 管理 API 由 admin token 保護
 - 桌機與手機響應式介面
 
 技術架構：
@@ -36,15 +37,16 @@ flowchart LR
 
 ## Database Design
 
-資料庫共 12 張資料表：
+資料庫共 13 張資料表：
 
 | Table | Purpose | Important Keys |
 |---|---|---|
+| `admins` | 管理後台帳號與 hashed password | PK `admin_id`; UK `username` |
 | `training_goals` | 訓練目標與預設處方 | PK `training_goal_id` |
 | `users` | 匿名基本資料與訓練偏好 | PK `user_id`; FK `training_goal_id` |
 | `body_parts` | 標準化身體部位 | PK `body_part_id` |
 | `user_body_parts` | User 與 Body Part 的 M:N junction table | Composite PK/FK |
-| `exercises` | 動作資料庫與參考圖片 URL | PK `exercise_id`; FK `body_part_id` |
+| `exercises` | 動作資料庫、參考圖片/GIF、目標肌群與 instructions | PK `exercise_id`; FK `body_part_id`; UK `external_exercise_id` |
 | `workout_plans` | 產生的週課表 | PK `plan_id`; FK `user_id`, `training_goal_id` |
 | `plan_days` | 課表中的訓練日 | PK `plan_day_id`; FK `plan_id` |
 | `plan_exercises` | 每日動作與目標處方 | PK `plan_exercise_id`; FK `plan_day_id`, `exercise_id` |
@@ -61,6 +63,13 @@ flowchart LR
 
 ```mermaid
 erDiagram
+    ADMINS {
+        bigint admin_id PK
+        varchar username UK
+        varchar password_hash
+        boolean is_active
+        timestamptz last_login_at
+    }
     TRAINING_GOALS ||--o{ USERS : selects
     TRAINING_GOALS ||--o{ WORKOUT_PLANS : snapshots
     USERS ||--o{ USER_BODY_PARTS : chooses
@@ -114,8 +123,13 @@ cp frontend/.env.example frontend/.env
 | Variable | Used by | Description |
 |---|---|---|
 | `DATABASE_URL` | Backend | PostgreSQL connection string；可接受 `postgresql://` 或 `postgresql+psycopg://` |
+| `SECRET_KEY` | Backend | Admin token signing secret；production 請使用長隨機字串 |
+| `ADMIN_BOOTSTRAP_USERNAME` | Backend | 初始 admin username；預設可用 `admin` |
+| `ADMIN_BOOTSTRAP_PASSWORD` | Backend | 初始 admin password；只放 `.env` 或部署平台環境變數，seed 後以 PBKDF2 hash 儲存 |
 | `CORS_ORIGINS` | Backend | 本機分離開發時允許的前端 origins，以逗號分隔 |
 | `FRONTEND_URL` | Backend | 前端公開網址（文件與部署識別用途） |
+| `EXERCISEDB_API_URL` | Backend | Optional ExerciseDB / AscendAPI free endpoint |
+| `EXERCISEDB_SYNC_ON_SEED` | Backend | `true` 時 seed 階段嘗試同步 ExerciseDB GIF/instructions；失敗時自動使用 fallback |
 | `VITE_API_URL` | Frontend | API base URL；production 同網域使用 `/api` |
 
 所有 `.env`、Password、API key 與 connection string 已由 `.gitignore` 排除。`VITE_` 變數會進入瀏覽器 bundle，絕對不可放敏感資料。
@@ -146,6 +160,13 @@ npm run dev
 
 5. 開啟 `http://localhost:5173`；API docs 位於 `http://localhost:8000/docs`。
 
+本機後台：
+
+- URL：`http://localhost:5173/admin/login`
+- Username：`ADMIN_BOOTSTRAP_USERNAME`
+- Password：`ADMIN_BOOTSTRAP_PASSWORD`
+- Public user website 仍然不需要登入。
+
 測試與靜態檢查：
 
 ```bash
@@ -175,6 +196,8 @@ docker run --env-file .env -p 8000:8000 fitness-tracker
 - Docker Web Service：`fitness-tracking-management-system`
 - Cloud PostgreSQL：`fitness-tracking-management-system-db`
 - `DATABASE_URL`：由 Render 用 `fromDatabase.connectionString` 自動注入，不需要手動貼到 GitHub 或程式碼
+- `SECRET_KEY`：由 Render Blueprint 自動產生
+- `ADMIN_BOOTSTRAP_PASSWORD`：使用 Render secret env var 手動輸入，不 commit 到 repository
 
 部署步驟：
 
@@ -182,9 +205,10 @@ docker run --env-file .env -p 8000:8000 fitness-tracker
 2. 在 Render 選擇 **New → Blueprint**。
 3. 連接 repository：`https://github.com/Loisekoy/-.git`。
 4. Render 會讀取根目錄的 `render.yaml` 與 `Dockerfile`，並自動建立 Web Service + PostgreSQL。
-5. 部署啟動時會自動執行 `alembic upgrade head` 與 idempotent seed。
-6. 健康檢查路徑為 `/api/health`；API 文件為 `/docs`。
-7. 部署完成後，任何人都可直接開啟 Render 的公開 HTTPS URL，不需要 GitHub 帳號或網站登入。
+5. 在 Render Blueprint / Web Service 的 Environment 裡設定 `ADMIN_BOOTSTRAP_PASSWORD`。
+6. 部署啟動時會自動執行 `alembic upgrade head` 與 idempotent seed。
+7. 健康檢查路徑為 `/api/health`；API 文件為 `/docs`。
+8. 部署完成後，任何人都可直接開啟 Render 的公開 HTTPS URL，不需要 GitHub 帳號或網站登入。
 
 注意：Render Free PostgreSQL 目前會在建立 30 天後到期；如果課程需要長期保存 Demo，可改成 Neon Free PostgreSQL 或升級付費 PostgreSQL。若改用 Neon，只要把 `render.yaml` 的 `DATABASE_URL` 改回 `sync: false`，並在 Render Dashboard 手動填入 Neon connection string。
 
@@ -197,6 +221,10 @@ docker run --env-file .env -p 8000:8000 fitness-tracker
 老師可直接透過網址進入，不需要 GitHub 帳號、不需要 Login / Register。Database System 展示頁位於：
 
 [https://fitness-tracking-management-system.onrender.com/database](https://fitness-tracking-management-system.onrender.com/database)
+
+管理後台：
+
+[https://fitness-tracking-management-system.onrender.com/admin/login](https://fitness-tracking-management-system.onrender.com/admin/login)
 
 ## Recommendation Algorithm
 
@@ -213,4 +241,13 @@ docker run --env-file .env -p 8000:8000 fitness-tracker
 
 ## Security and Privacy Scope
 
-依需求，本系統沒有 authentication 或 authorization。`user_id` 是匿名識別碼，不是存取權限；知道某個 UUID 的人可能透過 API 操作該筆資料。因此請只用暱稱與測試資料，不要輸入真實敏感健康資訊。若未來要正式公開收集個資，必須另行加入登入、授權、隱私政策與資料刪除流程。
+依需求，public user website 沒有使用者 authentication 或 authorization。`user_id` 是匿名識別碼，不是存取權限；知道某個 UUID 的人可能透過 API 操作該筆資料。因此請只用暱稱與測試資料，不要輸入真實敏感健康資訊。
+
+管理後台則是獨立保護區：
+
+- `/api/admin/*` 需要 admin bearer token。
+- Admin password 以 PBKDF2-SHA256 hash 儲存在 `admins.password_hash`。
+- `POST/PATCH/DELETE /api/exercises` 僅允許 admin token 呼叫。
+- Public API 不提供 unrestricted `GET /api/users` 清單。
+
+若未來要正式公開收集個資，必須另行加入使用者登入、授權、隱私政策與資料刪除流程。

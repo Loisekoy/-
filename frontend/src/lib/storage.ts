@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'fitness-tracker:user:v1'
+const ADMIN_TOKEN_KEY = 'fitness-tracker:admin-token:v1'
 
 interface StoredProfilePointer {
   version: 1
@@ -28,6 +29,30 @@ export function getUserId(): string | null {
 export function clearUserId(): void {
   try {
     localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // No action is required when local storage is unavailable.
+  }
+}
+
+export function saveAdminToken(token: string): void {
+  try {
+    localStorage.setItem(ADMIN_TOKEN_KEY, token)
+  } catch {
+    // Private browsing and strict privacy settings may block storage.
+  }
+}
+
+export function getAdminToken(): string | null {
+  try {
+    return localStorage.getItem(ADMIN_TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function clearAdminToken(): void {
+  try {
+    localStorage.removeItem(ADMIN_TOKEN_KEY)
   } catch {
     // No action is required when local storage is unavailable.
   }

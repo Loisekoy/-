@@ -1,12 +1,10 @@
 # Fitness Tracking Management System
 
-## Phase 1 — Revised Requirements and Database Design
+## Implemented Requirements and Database Design
 
-> Status: Draft v2 for approval
+> Status: Implemented schema with public no-login user flow and protected admin backend.
 >
-> This revision replaces the earlier design. The system has no Login, Register, Email, Password, or authentication feature.
->
-> This phase contains analysis and database design only. It does not contain application code, deployment configuration, GitHub push, or cloud resources.
+> Public users still have no Login, Register, Email, Password, or account authentication. The only authentication in this project is the separate `/admin` backend for database administration.
 
 ## 1. System Requirements
 
@@ -25,7 +23,9 @@ Fitness Tracking Management System（健身紀錄管理系統）是一個以 Pos
 - 瀏覽器保存 `user_id`，讓同一瀏覽器下次回到相同資料。
 - 系統可提供含 UUID 的專屬網址供使用者收藏。
 
-沒有 Authentication 代表系統不能證明誰是資料擁有者。任何取得某個使用者專屬網址或 UUID 的人都可能存取該筆資料，而且清除瀏覽器資料後無法透過 Email／Password 找回。此系統應定位為課程展示與非敏感健身資料工具，介面應建議使用暱稱，不輸入敏感個資。
+Public user flow 沒有 Authentication，代表系統不能證明誰是資料擁有者。任何取得某個使用者專屬網址或 UUID 的人都可能存取該筆資料，而且清除瀏覽器資料後無法透過 Email／Password 找回。此系統應定位為課程展示與非敏感健身資料工具，介面應建議使用暱稱，不輸入敏感個資。
+
+管理者後台是例外：`/admin/login` 使用獨立 `admins` table、hashed password 與 bearer token 保護 `/api/admin/*` 以及 Exercise 管理 API。
 
 ### 1.3 Functional requirements
 
@@ -44,6 +44,7 @@ Fitness Tracking Management System（健身紀錄管理系統）是一個以 Pos
 | FR-11 | Statistics | Training Volume、每週訓練次數、最常訓練部位及 Exercise |
 | FR-12 | Database queries | 支援 CRUD、Search、JOIN、GROUP BY、Aggregate Functions |
 | FR-13 | Dashboard | 以正規化資料即時計算並顯示核心統計 |
+| FR-14 | Admin backend | 管理者可查看 Users、User Detail、Statistics、Exercises；一般訪客不能取得全站 users list |
 
 ### 1.4 Non-functional and delivery requirements
 
@@ -137,6 +138,16 @@ Fitness Tracking Management System（健身紀錄管理系統）是一個以 Pos
 
 ```mermaid
 erDiagram
+    ADMINS {
+        bigint admin_id PK
+        varchar username UK
+        varchar password_hash
+        boolean is_active
+        timestamptz last_login_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
     TRAINING_GOALS ||--o{ USERS : selected_by
     USERS ||--|{ USER_BODY_PARTS : prefers
     BODY_PARTS ||--o{ USER_BODY_PARTS : selected_in
@@ -200,6 +211,12 @@ erDiagram
         varchar equipment
         varchar movement_type
         text description
+        varchar image_url
+        varchar external_exercise_id UK
+        varchar gif_url
+        json target_muscles
+        json secondary_muscles
+        json instructions
         boolean is_active
         timestamptz created_at
         timestamptz updated_at
@@ -275,6 +292,22 @@ erDiagram
 ```
 
 ## 5. Database Tables, Columns, and Keys
+
+### 5.0 `admins`
+
+Protected backend administration table. This table is not part of the public no-login user flow.
+
+| Column | PostgreSQL type | Null | Key / constraint |
+|---|---|---:|---|
+| `admin_id` | `BIGINT GENERATED AS IDENTITY` | No | PK |
+| `username` | `VARCHAR(80)` | No | UNIQUE; CHECK length ≥ 3 |
+| `password_hash` | `VARCHAR(255)` | No | PBKDF2-SHA256 encoded hash, never plaintext |
+| `is_active` | `BOOLEAN` | No | Default `true` |
+| `last_login_at` | `TIMESTAMPTZ` | Yes | Updated after successful login |
+| `created_at` | `TIMESTAMPTZ` | No | Default current time |
+| `updated_at` | `TIMESTAMPTZ` | No | Updated whenever the row changes |
+
+Admin accounts are seeded only when `ADMIN_BOOTSTRAP_PASSWORD` is supplied through environment variables. Plain passwords are never committed to GitHub.
 
 ### 5.1 `training_goals`
 
@@ -358,11 +391,16 @@ Shared Exercise Database.
 | `movement_type` | `VARCHAR(20)` | No | CHECK: `compound`, `isolation` |
 | `description` | `TEXT` | No | Exercise description |
 | `image_url` | `VARCHAR(255)` | Yes | Reference image path or URL for plan/workout display |
+| `external_exercise_id` | `VARCHAR(80)` | Yes | UNIQUE external ExerciseDB / AscendAPI ID |
+| `gif_url` | `VARCHAR(500)` | Yes | Optional GIF demonstration URL |
+| `target_muscles` | `JSON` | No | Ordered display metadata from ExerciseDB; default `[]` |
+| `secondary_muscles` | `JSON` | No | Ordered display metadata from ExerciseDB; default `[]` |
+| `instructions` | `JSON` | No | Ordered step-by-step instruction text; default `[]` |
 | `is_active` | `BOOLEAN` | No | Default `true` |
 | `created_at` | `TIMESTAMPTZ` | No | Default current time |
 | `updated_at` | `TIMESTAMPTZ` | No | Updated whenever the row changes |
 
-`movement_type` is an additional rule input: compound movements are preferred in the first positions of a Plan Day. `image_url` is stored with the Exercise row so the generated plan and active workout screen can display reference images from the Exercise Database.
+`movement_type` is an additional rule input: compound movements are preferred in the first positions of a Plan Day. `image_url` / `gif_url` are stored with the Exercise row so the generated plan and active workout screen can display reference images from the Exercise Database. The JSON arrays are non-key display metadata imported from ExerciseDB or seeded fallback data; relational training relationships still use `body_parts`, `plan_exercises`, and `workout_sets`.
 
 ### 5.6 `workout_plans`
 
@@ -496,12 +534,14 @@ PostgreSQL automatically indexes PK and UNIQUE constraints. The following additi
 
 | Table | Index / constraint | Purpose |
 |---|---|---|
+| `admins` | UNIQUE (`username`) | Admin login lookup and duplicate prevention |
 | `training_goals` | UNIQUE (`goal_code`) | Stable rule lookup |
 | `users` | index (`training_goal_id`) | Goal distribution and FK lookup |
 | `user_body_parts` | PK (`user_id`, `body_part_id`) | Prevent duplicate selection |
 | `user_body_parts` | index (`body_part_id`, `user_id`) | Reverse M:N lookup |
 | `body_parts` | UNIQUE (`body_part_code`) | Stable catalogue key |
 | `exercises` | UNIQUE (`LOWER(exercise_name)`) | Case-insensitive duplicate prevention |
+| `exercises` | UNIQUE (`external_exercise_id`) | Match optional ExerciseDB / AscendAPI source rows |
 | `exercises` | index (`body_part_id`, `difficulty_level`, `is_active`) | Recommendation filtering |
 | `exercises` | index (`equipment`, `is_active`) | Search filter |
 | `workout_plans` | index (`user_id`, `generated_at` DESC) | Plan history |
@@ -682,7 +722,7 @@ The exact Exercises are selected from the active Exercise Database using difficu
 - Every column contains one atomic value.
 - Preferred Body Parts are separate `user_body_parts` rows, not a multi-value VARCHAR.
 - Plan Days, Exercises, Workout Sets, and Weight Records are separate rows.
-- No list of Exercise IDs or Set values is stored in JSON/text.
+- No list of Exercise IDs, Set values, or selected Body Parts is stored in JSON/text. ExerciseDB muscles and instructions are kept as display metadata arrays because they are not used as relational ownership or recommendation junctions in version 1.
 
 ### 10.2 Second Normal Form
 
@@ -699,6 +739,7 @@ The exact Exercises are selected from the active Exercise Database using difficu
 - Actual Workout Sessions and Sets are separate from recommended Plan rows.
 - Optional Session provenance is separated into `session_plan_days`, avoiding a `plan_day_id → user_id` transitive dependency inside `workout_sessions`.
 - Exercise attributes are not copied into `plan_exercises` or `workout_sets`.
+- Admin authentication data is isolated in `admins` and does not introduce transitive dependencies into public `users`.
 - Training Volume, workout counts, popularity, latest Weight, and Weight change are derived, not stored.
 - Plan generation inputs in `workout_plans` are deliberate historical snapshot facts about that Plan, not current User attributes.
 - `session_name` is a historical Session label and is not required to remain equal to a later-edited Plan Day name.
@@ -716,13 +757,16 @@ The schema satisfies 3NF for the stated business rules. No denormalized summary 
 - UUID reduces ID guessing but is not authentication or authorization.
 - Every user-owned API query must be scoped by `user_id` and verify child-row ownership through JOINs; the backend must not expose unscoped sequential child IDs as sufficient access by themselves.
 - Because the product explicitly has no login, the UI must not claim that a Profile is private.
+- Admin APIs are protected by bearer tokens signed with `SECRET_KEY`.
+- Admin passwords are hashed before being stored in `admins.password_hash`.
+- Public visitors cannot call an unrestricted `GET /api/users` endpoint.
 - Schema changes will be committed as migrations without secrets.
 
-## 12. Phase 1 Acceptance Checklist
+## 12. Implementation Checklist
 
 - [x] Revised no-login System Requirements documented.
 - [x] First-time and returning User Flow documented.
-- [x] ER Diagram revised to 12 normalized tables, including the 11 requested tables plus `session_plan_days`.
+- [x] ER Diagram revised to 13 tables, including the 11 requested public tables plus `session_plan_days` and protected `admins`.
 - [x] Columns and PostgreSQL data types defined.
 - [x] Primary Keys and Foreign Keys defined.
 - [x] 1:N and M:N Relationships defined.
@@ -731,18 +775,6 @@ The schema satisfies 3NF for the stated business rules. No denormalized summary 
 - [x] Search, JOIN, GROUP BY, aggregates, History, and Dashboard mapped.
 - [x] 3NF reviewed.
 - [x] Rule-based Workout Recommendation Algorithm specified without AI API.
-- [ ] User approves or requests changes.
-- [ ] Database Design is frozen before implementation.
-
-## 13. Decisions to Confirm Before Implementation
-
-Please approve or change these design choices:
-
-1. `user_id` uses UUID and is saved in the browser; without login there is no ownership verification or account recovery.
-2. Weight entered during onboarding is saved as the first `body_records` row, not duplicated in `users`.
-3. Each Exercise has one primary Body Part in version 1.
-4. The same Exercise may appear on different Plan Days but only once per Day.
-5. The recommendation uses the stated split, duration capacity, scoring, and Goal prescriptions under `rules-v1`.
-6. Beginner minimum age is currently set to 13; this can be adjusted before implementation.
-
-After approval, Phase 2 may create the GitHub-ready project structure, SQL migrations, seed data, backend API, responsive frontend, automated tests, `.env.example`, `.gitignore`, and README. No implementation starts before approval.
+- [x] Admin backend added with protected login, dashboard, users, detail, statistics, and exercise database.
+- [x] Exercise GIF/image/instructions metadata added with local fallback.
+- [x] Cloud env variables documented without committing secrets.

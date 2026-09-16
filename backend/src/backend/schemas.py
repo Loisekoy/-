@@ -97,6 +97,11 @@ class ExerciseBase(BaseModel):
     movement_type: MovementType
     description: str = Field(min_length=1)
     image_url: str | None = Field(default=None, max_length=255)
+    external_exercise_id: str | None = Field(default=None, max_length=80)
+    gif_url: str | None = Field(default=None, max_length=500)
+    target_muscles: list[str] = Field(default_factory=list)
+    secondary_muscles: list[str] = Field(default_factory=list)
+    instructions: list[str] = Field(default_factory=list)
 
 
 class ExerciseCreate(ExerciseBase):
@@ -111,6 +116,11 @@ class ExerciseUpdate(BaseModel):
     movement_type: MovementType | None = None
     description: str | None = Field(default=None, min_length=1)
     image_url: str | None = Field(default=None, max_length=255)
+    external_exercise_id: str | None = Field(default=None, max_length=80)
+    gif_url: str | None = Field(default=None, max_length=500)
+    target_muscles: list[str] | None = None
+    secondary_muscles: list[str] | None = None
+    instructions: list[str] | None = None
     is_active: bool | None = None
 
 
@@ -123,6 +133,11 @@ class ExerciseRead(ORMModel):
     movement_type: str
     description: str
     image_url: str | None
+    external_exercise_id: str | None
+    gif_url: str | None
+    target_muscles: list[str]
+    secondary_muscles: list[str]
+    instructions: list[str]
     is_active: bool
 
 
@@ -288,3 +303,105 @@ class DatabaseOverviewRead(BaseModel):
     relationships: list[DatabaseRelationshipRead]
     query_examples: list[DatabaseQueryExampleRead]
     normalization_notes: list[str]
+
+
+class AdminLoginRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=80)
+    password: str = Field(min_length=8, max_length=200)
+
+
+class AdminRead(ORMModel):
+    admin_id: int
+    username: str
+    is_active: bool
+    created_at: datetime
+    last_login_at: datetime | None
+
+
+class AdminLoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    admin: AdminRead
+
+
+class AdminMetricRead(BaseModel):
+    label: str
+    value: int | float
+
+
+class AdminRecentUserRead(BaseModel):
+    user_id: uuid.UUID
+    name: str
+    age: int
+    goal: str
+    experience: str
+    joined: datetime
+
+
+class AdminDashboardRead(BaseModel):
+    total_users: int
+    new_users_today: int
+    total_workouts: int
+    total_workout_plans: int
+    average_age: float | None
+    average_training_days: float | None
+    total_training_volume: float
+    recent_users: list[AdminRecentUserRead]
+
+
+class AdminUserListItemRead(BaseModel):
+    user_id: uuid.UUID
+    name: str
+    gender: str | None
+    age: int
+    height_cm: Decimal
+    latest_weight_kg: Decimal | None
+    training_goal: str
+    training_experience: str
+    training_days_per_week: int
+    training_duration_minutes: int
+    preferred_body_parts: list[str]
+    created_at: datetime
+
+
+class PaginatedAdminUsersRead(BaseModel):
+    items: list[AdminUserListItemRead]
+    total: int
+    page: int
+    page_size: int
+
+
+class AdminPlanSummaryRead(BaseModel):
+    plan_id: int
+    plan_name: str
+    status: str
+    generated_at: datetime
+    days: list[PlanDayRead]
+
+
+class AdminWorkoutSessionSummaryRead(BaseModel):
+    session_id: int
+    session_name: str
+    status: str
+    started_at: datetime
+    ended_at: datetime | None
+    set_count: int
+    volume_kg: float
+
+
+class AdminUserDetailRead(BaseModel):
+    profile: UserProfileRead
+    workout_plans: list[AdminPlanSummaryRead]
+    workout_history: list[AdminWorkoutSessionSummaryRead]
+    weight_history: list[BodyRecordRead]
+
+
+class AdminStatisticsRead(BaseModel):
+    total_users: int
+    users_by_training_goal: list[MetricPoint]
+    users_by_experience_level: list[MetricPoint]
+    most_selected_body_parts: list[MetricPoint]
+    most_popular_exercises: list[MetricPoint]
+    average_training_days_per_week: float | None
+    total_workout_sessions: int
+    total_training_volume: float

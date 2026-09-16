@@ -10,9 +10,11 @@ import {
   getDayObjective,
   getExerciseCues,
   getExerciseImageSrc,
+  getExerciseInstructions,
   getExerciseObjective,
   getExerciseRole,
   getIntensityTip,
+  getPrimaryMuscles,
 } from '../lib/exerciseGuidance'
 import { getUserId } from '../lib/storage'
 
@@ -174,6 +176,8 @@ export default function PlanPage() {
           <div className="plan-exercise-cards" aria-label={`${selectedDay.day_name} 詳細動作`}>
             {selectedDay.exercises.map((item, index) => {
               const cues = getExerciseCues(item.exercise)
+              const instructions = getExerciseInstructions(item.exercise)
+              const primaryMuscles = getPrimaryMuscles(item.exercise)
               return (
                 <article className="plan-exercise-card" key={item.plan_exercise_id}>
                   <div className="exercise-reference">
@@ -220,6 +224,39 @@ export default function PlanPage() {
                         </ul>
                       </div>
                     </div>
+                    <details className="exercise-detail-panel">
+                      <summary>查看完整動作示範與步驟</summary>
+                      <div className="exercise-detail-panel__content">
+                        <div className="exercise-demo-frame">
+                          <img
+                            src={getExerciseImageSrc(item.exercise)}
+                            alt={`${item.exercise.exercise_name} 動作示範`}
+                          />
+                          <span>{item.exercise.gif_url ? 'GIF Demo' : 'Local Reference Image'}</span>
+                        </div>
+                        <div className="exercise-detail-copy">
+                          <div className="exercise-muscle-grid">
+                            <div>
+                              <span>主要訓練肌群</span>
+                              <p>{primaryMuscles.join(', ')}</p>
+                            </div>
+                            <div>
+                              <span>輔助肌群</span>
+                              <p>{item.exercise.secondary_muscles.length ? item.exercise.secondary_muscles.join(', ') : '依動作穩定需求啟動核心與協同肌群'}</p>
+                            </div>
+                          </div>
+                          <ol>
+                            {instructions.map((instruction) => (
+                              <li key={instruction}>{instruction}</li>
+                            ))}
+                          </ol>
+                          <p>
+                            建議安排：{item.target_sets} 組 × {item.target_reps} 下，
+                            組間休息 {item.rest_seconds} 秒。{getIntensityTip(item)}
+                          </p>
+                        </div>
+                      </div>
+                    </details>
                   </div>
                 </article>
               )

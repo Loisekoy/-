@@ -27,6 +27,7 @@ router = APIRouter(prefix="/database", tags=["database"])
 SessionDep = Annotated[Session, Depends(get_db)]
 
 TABLE_ORDER = [
+    "admins",
     "users",
     "training_goals",
     "body_parts",
@@ -176,6 +177,7 @@ def database_overview(
             Exercise.difficulty_level.label("difficulty"),
             Exercise.equipment,
             Exercise.image_url,
+            Exercise.gif_url,
         )
         .join(BodyPart, BodyPart.body_part_id == Exercise.body_part_id)
         .where(Exercise.is_active.is_(True))
@@ -248,7 +250,7 @@ def database_overview(
                 title="JOIN：Exercise 與 Body Part",
                 sql=(
                     "SELECT e.exercise_name, bp.name_en AS body_part, "
-                    "e.difficulty_level, e.equipment, e.image_url "
+                    "e.difficulty_level, e.equipment, e.image_url, e.gif_url "
                     "FROM exercises e JOIN body_parts bp ON e.body_part_id = bp.body_part_id "
                     "WHERE e.is_active = TRUE ORDER BY bp.display_order, e.exercise_name LIMIT 8;"
                 ),

@@ -21,6 +21,15 @@ def create_profile(client: TestClient) -> dict:
     return response.json()
 
 
+def admin_headers(client: TestClient) -> dict[str, str]:
+    response = client.post(
+        "/api/admin/login",
+        json={"username": "admin", "password": "admin-test-password"},
+    )
+    assert response.status_code == 200, response.text
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
 def test_health_and_reference_catalogues(client: TestClient) -> None:
     assert client.get("/api/health").json() == {"status": "ok"}
     assert len(client.get("/api/reference/training-goals").json()) == 4
@@ -87,6 +96,20 @@ def test_complete_onboarding_plan_workout_and_dashboard_flow(client: TestClient)
     assert dashboard["working_sets"] == 3
     assert dashboard["training_volume_kg"] == 1890.0
     assert dashboard["most_trained_body_part"] == "Chest"
+
+    headers = admin_headers(client)
+    admin_dashboard = client.get("/api/admin/dashboard", headers=headers)
+    assert admin_dashboard.status_code == 200, admin_dashboard.text
+    assert admin_dashboard.json()["total_users"] == 1
+    admin_users = client.get("/api/admin/users?search=Demo", headers=headers)
+    assert admin_users.status_code == 200, admin_users.text
+    assert admin_users.json()["total"] == 1
+    admin_detail = client.get(f"/api/admin/users/{user_id}", headers=headers)
+    assert admin_detail.status_code == 200, admin_detail.text
+    assert admin_detail.json()["profile"]["name"] == "Demo Student"
+    admin_stats = client.get("/api/admin/statistics", headers=headers)
+    assert admin_stats.status_code == 200, admin_stats.text
+    assert admin_stats.json()["total_users"] == 1
 
     database_response = client.get(f"/api/database/overview?user_id={user_id}")
     assert database_response.status_code == 200, database_response.text
@@ -165,8 +188,27 @@ def test_exercise_search_and_crud_with_foreign_key_safe_delete(client: TestClien
     assert bench_search.status_code == 200
     assert any(item["exercise_name"] == "Bench Press" for item in bench_search.json())
 
+    public_create = client.post(
+        "/api/exercises",
+        json={
+            "exercise_name": "Blocked Public Exercise",
+            "body_part_id": 8,
+            "difficulty_level": "beginner",
+            "equipment": "Cable",
+            "movement_type": "isolation",
+            "description": "Public writes should require admin authentication.",
+        },
+    )
+    assert public_create.status_code == 401
+
+    headers = admin_headers(client)
+    admin_exercises = client.get("/api/admin/exercises?search=bench", headers=headers)
+    assert admin_exercises.status_code == 200
+    assert any(item["exercise_name"] == "Bench Press" for item in admin_exercises.json())
+
     create_response = client.post(
         "/api/exercises",
+        headers=headers,
         json={
             "exercise_name": "Cable Crunch Test",
             "body_part_id": 8,
@@ -183,6 +225,7 @@ def test_exercise_search_and_crud_with_foreign_key_safe_delete(client: TestClien
 
     duplicate_response = client.post(
         "/api/exercises",
+        headers=headers,
         json={
             "exercise_name": "cable crunch test",
             "body_part_id": 8,
@@ -196,12 +239,13 @@ def test_exercise_search_and_crud_with_foreign_key_safe_delete(client: TestClien
 
     update_response = client.patch(
         f"/api/exercises/{exercise_id}",
+        headers=headers,
         json={"exercise_name": "Machine Crunch Test", "difficulty_level": "intermediate"},
     )
     assert update_response.status_code == 200, update_response.text
     assert update_response.json()["exercise_name"] == "Machine Crunch Test"
 
-    delete_response = client.delete(f"/api/exercises/{exercise_id}")
+    delete_response = client.delete(f"/api/exercises/{exercise_id}", headers=headers)
     assert delete_response.status_code == 204
     assert client.get("/api/reference/exercises?search=Machine%20Crunch%20Test").json() == []
 
@@ -210,7 +254,9 @@ def test_exercise_search_and_crud_with_foreign_key_safe_delete(client: TestClien
     plan = client.post(f"/api/users/{user_id}/plans/generate").json()
     referenced_exercise = plan["days"][0]["exercises"][0]["exercise"]
 
-    safe_delete = client.delete(f"/api/exercises/{referenced_exercise['exercise_id']}")
+    safe_delete = client.delete(
+        f"/api/exercises/{referenced_exercise['exercise_id']}", headers=headers
+    )
     assert safe_delete.status_code == 204
     inactive_search = client.get(
         "/api/reference/exercises",

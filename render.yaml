@@ -13,6 +13,16 @@ services:
         fromDatabase:
           name: fitness-tracking-management-system-db
           property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_BOOTSTRAP_USERNAME
+        value: admin
+      - key: ADMIN_BOOTSTRAP_PASSWORD
+        sync: false
+      - key: EXERCISEDB_API_URL
+        value: https://oss.exercisedb.dev/api/v1/exercises
+      - key: EXERCISEDB_SYNC_ON_SEED
+        value: "true"
       - key: CORS_ORIGINS
         value: ""
 
