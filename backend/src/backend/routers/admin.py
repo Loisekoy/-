@@ -14,6 +14,7 @@ from backend.models import (
     BodyPart,
     BodyRecord,
     Exercise,
+    LLMGeneration,
     PlanDay,
     PlanExercise,
     TrainingGoal,
@@ -39,6 +40,7 @@ from backend.schemas import (
     MetricPoint,
     PaginatedAdminUsersRead,
     UserProfileRead,
+    WorkoutSetRead,
 )
 from backend.security import create_admin_token, verify_password
 
@@ -121,6 +123,21 @@ def admin_dashboard(db: SessionDep, _admin: CurrentAdminDep) -> AdminDashboardRe
     )
     total_workouts = db.scalar(select(func.count()).select_from(WorkoutSession)) or 0
     total_workout_plans = db.scalar(select(func.count()).select_from(WorkoutPlan)) or 0
+    completed_workouts_today = (
+        db.scalar(
+            select(func.count())
+            .select_from(WorkoutSession)
+            .where(
+                WorkoutSession.status == "completed",
+                func.date(WorkoutSession.completed_at) == today,
+            )
+        )
+        or 0
+    )
+    total_exercises = (
+        db.scalar(select(func.count()).select_from(Exercise).where(Exercise.is_active.is_(True)))
+        or 0
+    )
     average_age = db.scalar(select(func.avg(User.age)))
     average_training_days = db.scalar(select(func.avg(User.training_days_per_week)))
     total_volume = db.scalar(
@@ -139,6 +156,8 @@ def admin_dashboard(db: SessionDep, _admin: CurrentAdminDep) -> AdminDashboardRe
         new_users_today=new_users_today,
         total_workouts=total_workouts,
         total_workout_plans=total_workout_plans,
+        completed_workouts_today=completed_workouts_today,
+        total_exercises=total_exercises,
         average_age=round(float(average_age), 2) if average_age is not None else None,
         average_training_days=(
             round(float(average_training_days), 2) if average_training_days is not None else None
@@ -241,6 +260,7 @@ def admin_user_detail(
             WorkoutSession.status,
             WorkoutSession.started_at,
             WorkoutSession.ended_at,
+            WorkoutSession.completed_at,
             func.count(WorkoutSet.workout_set_id).label("set_count"),
             func.coalesce(func.sum(WorkoutSet.weight_kg * WorkoutSet.reps), 0).label("volume"),
         )
@@ -252,12 +272,25 @@ def admin_user_detail(
             WorkoutSession.status,
             WorkoutSession.started_at,
             WorkoutSession.ended_at,
+            WorkoutSession.completed_at,
         )
         .order_by(WorkoutSession.started_at.desc())
         .limit(20)
     ).all()
     body_records = db.scalars(
         select(BodyRecord).where(BodyRecord.user_id == user_id).order_by(BodyRecord.recorded_on)
+    ).all()
+    workout_sets = db.scalars(
+        select(WorkoutSet)
+        .join(WorkoutSession, WorkoutSession.session_id == WorkoutSet.session_id)
+        .options(joinedload(WorkoutSet.exercise).joinedload(Exercise.body_part))
+        .where(WorkoutSession.user_id == user_id)
+        .order_by(WorkoutSession.started_at.desc(), WorkoutSet.set_order)
+    ).all()
+    llm_generations = db.scalars(
+        select(LLMGeneration)
+        .where(LLMGeneration.user_id == user_id)
+        .order_by(LLMGeneration.created_at.desc())
     ).all()
     return AdminUserDetailRead(
         profile=UserProfileRead(
@@ -292,12 +325,15 @@ def admin_user_detail(
                 status=row.status,
                 started_at=row.started_at,
                 ended_at=row.ended_at,
+                completed_at=row.completed_at,
                 set_count=row.set_count,
                 volume_kg=float(row.volume),
             )
             for row in history_rows
         ],
+        workout_sets=[WorkoutSetRead.model_validate(workout_set) for workout_set in workout_sets],
         weight_history=[BodyRecordRead.model_validate(record) for record in body_records],
+        llm_generations=llm_generations,
     )
 
 
@@ -373,7 +409,14 @@ def admin_exercises(
     if search:
         pattern = f"%{search.strip()}%"
         statement = statement.where(
-            or_(Exercise.exercise_name.ilike(pattern), Exercise.description.ilike(pattern))
+            or_(
+                Exercise.exercise_name.ilike(pattern),
+                Exercise.exercise_name_en.ilike(pattern),
+                Exercise.exercise_name_zh.ilike(pattern),
+                Exercise.description.ilike(pattern),
+                Exercise.description_en.ilike(pattern),
+                Exercise.description_zh.ilike(pattern),
+            )
         )
     if body_part_id is not None:
         statement = statement.where(Exercise.body_part_id == body_part_id)

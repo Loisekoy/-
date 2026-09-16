@@ -1,5 +1,7 @@
 const STORAGE_KEY = 'fitness-tracker:user:v1'
 const ADMIN_TOKEN_KEY = 'fitness-tracker:admin-token:v1'
+const LANGUAGE_KEY = 'fitness-tracker:language:v1'
+export type LanguagePreference = 'zh-TW' | 'en'
 
 interface StoredProfilePointer {
   version: 1
@@ -55,5 +57,22 @@ export function clearAdminToken(): void {
     localStorage.removeItem(ADMIN_TOKEN_KEY)
   } catch {
     // No action is required when local storage is unavailable.
+  }
+}
+
+export function saveLanguage(language: LanguagePreference): void {
+  try {
+    localStorage.setItem(LANGUAGE_KEY, language)
+  } catch {
+    // Private browsing and strict privacy settings may block storage.
+  }
+}
+
+export function getLanguage(): LanguagePreference {
+  try {
+    const value = localStorage.getItem(LANGUAGE_KEY)
+    return value === 'en' || value === 'zh-TW' ? value : 'zh-TW'
+  } catch {
+    return 'zh-TW'
   }
 }

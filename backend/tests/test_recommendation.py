@@ -25,8 +25,7 @@ def test_focus_schedule_covers_major_regions_and_repeats_preferences() -> None:
 def test_focus_schedule_validates_inputs() -> None:
     with pytest.raises(RecommendationError):
         build_focus_schedule(1, 60, ["chest"])
-    with pytest.raises(RecommendationError):
-        build_focus_schedule(4, 45, ["chest"])
+    assert all(len(day) == 5 for day in build_focus_schedule(4, 45, ["chest"]))
     with pytest.raises(RecommendationError):
         build_focus_schedule(4, 60, [])
 

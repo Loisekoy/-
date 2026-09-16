@@ -31,16 +31,17 @@ SessionDep = Annotated[Session, Depends(get_db)]
 
 def _session_loader():
     return (
+        selectinload(WorkoutSession.source),
         selectinload(WorkoutSession.sets)
         .joinedload(WorkoutSet.exercise)
-        .joinedload(Exercise.body_part)
+        .joinedload(Exercise.body_part),
     )
 
 
 def _get_session(db: Session, user_id: uuid.UUID, session_id: int) -> WorkoutSession:
     workout = db.scalar(
         select(WorkoutSession)
-        .options(_session_loader())
+        .options(*_session_loader())
         .where(
             WorkoutSession.session_id == session_id,
             WorkoutSession.user_id == user_id,
@@ -87,7 +88,7 @@ def list_sessions(
 ) -> list[WorkoutSession]:
     statement = (
         select(WorkoutSession)
-        .options(_session_loader())
+        .options(*_session_loader())
         .where(WorkoutSession.user_id == user_id)
         .order_by(WorkoutSession.started_at.desc())
     )
@@ -115,6 +116,18 @@ def create_set(
     workout = _get_session(db, user_id, session_id)
     if workout.status != "in_progress":
         raise HTTPException(status_code=409, detail="Only an in-progress workout can be edited")
+    if workout.source is not None:
+        allowed_exercise_id = db.scalar(
+            select(PlanExercise.exercise_id).where(
+                PlanExercise.plan_day_id == workout.source.plan_day_id,
+                PlanExercise.exercise_id == payload.exercise_id,
+            )
+        )
+        if allowed_exercise_id is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Exercise is not part of this workout session plan day",
+            )
     exercise = db.scalar(
         select(Exercise)
         .options(joinedload(Exercise.body_part))
@@ -200,6 +213,18 @@ def complete_session(user_id: uuid.UUID, session_id: int, db: SessionDep) -> Wor
     if not workout.sets:
         raise HTTPException(status_code=409, detail="Record at least one set before completion")
     workout.status = "completed"
+    workout.ended_at = datetime.now(UTC)
+    workout.completed_at = workout.ended_at
+    db.commit()
+    return _get_session(db, user_id, session_id)
+
+
+@router.post("/sessions/{session_id}/abandon", response_model=WorkoutSessionRead)
+def abandon_session(user_id: uuid.UUID, session_id: int, db: SessionDep) -> WorkoutSession:
+    workout = _get_session(db, user_id, session_id)
+    if workout.status != "in_progress":
+        raise HTTPException(status_code=409, detail="Workout is not in progress")
+    workout.status = "abandoned"
     workout.ended_at = datetime.now(UTC)
     db.commit()
     return _get_session(db, user_id, session_id)

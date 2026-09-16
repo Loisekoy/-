@@ -32,6 +32,10 @@ def create_exercise(payload: ExerciseCreate, db: SessionDep, _admin: CurrentAdmi
         raise HTTPException(status_code=422, detail="Invalid body part")
     exercise = Exercise(**payload.model_dump())
     exercise.exercise_name = exercise.exercise_name.strip()
+    if exercise.exercise_name_en:
+        exercise.exercise_name_en = exercise.exercise_name_en.strip()
+    if exercise.exercise_name_zh:
+        exercise.exercise_name_zh = exercise.exercise_name_zh.strip()
     db.add(exercise)
     try:
         db.commit()
@@ -50,7 +54,8 @@ def update_exercise(
     if "body_part_id" in changes and db.get(BodyPart, changes["body_part_id"]) is None:
         raise HTTPException(status_code=422, detail="Invalid body part")
     for key, value in changes.items():
-        if key in {"exercise_name", "image_url"} and isinstance(value, str):
+        strip_fields = {"exercise_name", "exercise_name_en", "exercise_name_zh", "image_url"}
+        if key in strip_fields and isinstance(value, str):
             value = value.strip()
         setattr(exercise, key, value)
     try:

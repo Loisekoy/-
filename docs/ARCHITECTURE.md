@@ -43,4 +43,5 @@ The browser stores only `{ version, userId }` under a versioned local-storage ke
 - Repository/query modules own SQLAlchemy statements and aggregate SQL.
 - Alembic owns schema changes; application startup does not call `create_all` in production.
 - Profile onboarding is one transaction across user, initial body record, and preferred-body-part rows.
-- Plan generation is one transaction and records `algorithm_version = 'rules-v1'`.
+- Plan generation is one transaction. It records `algorithm_version` as either an LLM-backed version such as `llm-openai:gpt-4.1-mini` or `rules-v1-fallback`.
+- LLM generation attempts are audited in `llm_generations`; API failures or missing `OPENAI_API_KEY` automatically fall back to the deterministic rule-based planner.

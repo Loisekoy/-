@@ -6,9 +6,12 @@ import { apiRequest } from '../api/client'
 import type { PlanExercise, WorkoutPlan, WorkoutSession } from '../api/types'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { LoadingScreen } from '../components/LoadingScreen'
+import { useI18n } from '../i18n'
 import {
   getDayObjective,
   getExerciseCues,
+  getExerciseDescription,
+  getExerciseDisplayName,
   getExerciseImageSrc,
   getExerciseInstructions,
   getExerciseObjective,
@@ -20,6 +23,7 @@ import { getUserId } from '../lib/storage'
 
 export default function PlanPage() {
   const navigate = useNavigate()
+  const { language, t } = useI18n()
   const userId = getUserId()
   const [plan, setPlan] = useState<WorkoutPlan | null>(null)
   const [selectedDayIndex, setSelectedDayIndex] = useState(0)
@@ -50,7 +54,7 @@ export default function PlanPage() {
       </main>
     )
   }
-  if (!plan && !error) return <LoadingScreen label="正在載入訓練課表" />
+  if (!plan && !error) return <LoadingScreen label={t('plan.loading')} />
   if (!plan) return <main className="page"><ErrorNotice message={error} /></main>
 
   const activePlan = plan
@@ -84,7 +88,7 @@ export default function PlanPage() {
         method: 'POST',
         body: JSON.stringify({ plan_day_id: selectedDay.plan_day_id }),
       })
-      navigate(`/workout/${selectedDay.plan_day_id}?session=${session.session_id}`)
+      navigate(`/workout/session/${session.session_id}`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '無法開始訓練。')
       setBusy(false)
@@ -113,8 +117,8 @@ export default function PlanPage() {
     <main className="page plan-page">
       <header className="page-heading">
         <div>
-          <h1>我的訓練課表</h1>
-          <p>規劃屬於你的訓練，持續前進，遇見更強的自己。</p>
+          <h1>{t('plan.title')}</h1>
+          <p>{t('plan.subtitle')}</p>
         </div>
       </header>
       {error ? <ErrorNotice message={error} /> : null}
@@ -141,33 +145,34 @@ export default function PlanPage() {
               <div className="plan-meta">
                 <span><Target size={18} /> {plan.training_goal.goal_name}</span>
                 <span><Clock3 size={18} /> {plan.training_duration_minutes} minutes</span>
+                <span>{plan.algorithm_version.startsWith('llm-') ? t('plan.aiBadge') : t('plan.fallbackBadge')}</span>
                 <span>{plan.algorithm_version}</span>
               </div>
             </div>
             <button className="button button--secondary" type="button" onClick={regeneratePlan} disabled={busy}>
-              <RotateCw size={18} aria-hidden="true" />重新產生課表
+              <RotateCw size={18} aria-hidden="true" />{t('plan.regenerate')}
             </button>
           </div>
 
           <div className="plan-day-heading">
             <div>
               <h2>Day {selectedDay.day_number}　{selectedDay.focus_summary}</h2>
-              <p>{getDayObjective(selectedDay)}</p>
+              <p>{getDayObjective(selectedDay, language)}</p>
             </div>
             <button className="button button--primary" type="button" onClick={startWorkout} disabled={busy}>
               <Play size={19} fill="currentColor" aria-hidden="true" />
-              {busy ? '準備中…' : `開始 Day ${selectedDay.day_number} 訓練`}
+              {busy ? '準備中…' : `${t('plan.startDay')} Day ${selectedDay.day_number}`}
             </button>
           </div>
 
           <section className="today-brief" aria-label="今日訓練重點">
             <div>
-              <span>今日主要任務</span>
-              <strong>{mainExercise.exercise.exercise_name}</strong>
-              <p>{getExerciseObjective(mainExercise.exercise)}</p>
+              <span>{t('plan.mainTask')}</span>
+              <strong>{getExerciseDisplayName(mainExercise.exercise, language)}</strong>
+              <p>{getExerciseObjective(mainExercise.exercise, language)}</p>
             </div>
             <div>
-              <span>預計訓練量</span>
+              <span>{t('plan.targetVolume')}</span>
               <strong>{selectedDay.exercises.length} 個動作・{totalTargetSets} 組</strong>
               <p>每個動作都有參考圖片、動作重點與建議強度；組數與次數可直接修改。</p>
             </div>
@@ -176,19 +181,20 @@ export default function PlanPage() {
           <div className="plan-exercise-cards" aria-label={`${selectedDay.day_name} 詳細動作`}>
             {selectedDay.exercises.map((item, index) => {
               const cues = getExerciseCues(item.exercise)
-              const instructions = getExerciseInstructions(item.exercise)
+              const instructions = getExerciseInstructions(item.exercise, language)
               const primaryMuscles = getPrimaryMuscles(item.exercise)
+              const exerciseName = getExerciseDisplayName(item.exercise, language)
               return (
                 <article className="plan-exercise-card" key={item.plan_exercise_id}>
                   <div className="exercise-reference">
-                    <img src={getExerciseImageSrc(item.exercise)} alt={`${item.exercise.exercise_name} 參考圖片`} />
-                    <span>{getExerciseRole(item, index)}</span>
+                    <img src={getExerciseImageSrc(item.exercise)} alt={`${exerciseName} 參考圖片`} />
+                    <span>{getExerciseRole(item, index, language)}</span>
                   </div>
                   <div className="plan-exercise-card__body">
                     <div className="exercise-card-heading">
                       <div>
                         <span>#{item.exercise_order}・{item.exercise.body_part.name_zh} / {item.exercise.body_part.name_en}</span>
-                        <h3>{item.exercise.exercise_name}</h3>
+                        <h3>{exerciseName}</h3>
                       </div>
                       <div className="exercise-tags">
                         <span>{item.exercise.difficulty_level}</span>
@@ -196,8 +202,8 @@ export default function PlanPage() {
                         <span>{item.exercise.movement_type}</span>
                       </div>
                     </div>
-                    <p className="exercise-description">{item.exercise.description}</p>
-                    <p className="exercise-objective">{getExerciseObjective(item.exercise)}</p>
+                    <p className="exercise-description">{getExerciseDescription(item.exercise, language)}</p>
+                    <p className="exercise-objective">{getExerciseObjective(item.exercise, language)}</p>
                     <div className="exercise-prescription-panel">
                       <label>
                         <span>目標組數</span>
@@ -215,7 +221,7 @@ export default function PlanPage() {
                     <div className="exercise-guidance-grid">
                       <div>
                         <span>重量建議</span>
-                        <p>{getIntensityTip(item)}</p>
+                        <p>{getIntensityTip(item, language)}</p>
                       </div>
                       <div>
                         <span>動作重點</span>
@@ -230,7 +236,7 @@ export default function PlanPage() {
                         <div className="exercise-demo-frame">
                           <img
                             src={getExerciseImageSrc(item.exercise)}
-                            alt={`${item.exercise.exercise_name} 動作示範`}
+                            alt={`${exerciseName} 動作示範`}
                           />
                           <span>{item.exercise.gif_url ? 'GIF Demo' : 'Local Reference Image'}</span>
                         </div>
@@ -252,7 +258,7 @@ export default function PlanPage() {
                           </ol>
                           <p>
                             建議安排：{item.target_sets} 組 × {item.target_reps} 下，
-                            組間休息 {item.rest_seconds} 秒。{getIntensityTip(item)}
+                            組間休息 {item.rest_seconds} 秒。{getIntensityTip(item, language)}
                           </p>
                         </div>
                       </div>

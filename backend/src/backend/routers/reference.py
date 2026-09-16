@@ -43,7 +43,11 @@ def list_exercises(
         statement = statement.where(
             or_(
                 Exercise.exercise_name.ilike(pattern),
+                Exercise.exercise_name_en.ilike(pattern),
+                Exercise.exercise_name_zh.ilike(pattern),
                 Exercise.description.ilike(pattern),
+                Exercise.description_en.ilike(pattern),
+                Exercise.description_zh.ilike(pattern),
             )
         )
     if body_part_id is not None:

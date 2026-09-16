@@ -19,17 +19,25 @@ export interface BodyPart {
 export interface Exercise {
   exercise_id: number
   exercise_name: string
+  exercise_name_en: string | null
+  exercise_name_zh: string | null
   body_part: BodyPart
   difficulty_level: string
   equipment: string
   movement_type: string
   description: string
+  description_en: string | null
+  description_zh: string | null
   image_url: string | null
   external_exercise_id: string | null
   gif_url: string | null
   target_muscles: string[]
   secondary_muscles: string[]
   instructions: string[]
+  instructions_en: string[]
+  instructions_zh: string[]
+  coaching_notes_en: string | null
+  coaching_notes_zh: string | null
   is_active: boolean
 }
 
@@ -93,10 +101,12 @@ export interface WorkoutSet {
 
 export interface WorkoutSession {
   session_id: number
+  plan_day_id: number | null
   session_name: string
   status: string
   started_at: string
   ended_at: string | null
+  completed_at: string | null
   notes: string | null
   sets: WorkoutSet[]
 }
@@ -191,6 +201,8 @@ export interface AdminDashboard {
   new_users_today: number
   total_workouts: number
   total_workout_plans: number
+  completed_workouts_today: number
+  total_exercises: number
   average_age: number | null
   average_training_days: number | null
   total_training_volume: number
@@ -232,8 +244,22 @@ export interface AdminWorkoutSessionSummary {
   status: string
   started_at: string
   ended_at: string | null
+  completed_at: string | null
   set_count: number
   volume_kg: number
+}
+
+export interface LlmGeneration {
+  llm_generation_id: number
+  user_id: string
+  provider: string
+  model: string
+  status: string
+  used_fallback: boolean
+  prompt_summary: string | null
+  response_summary: string | null
+  error_message: string | null
+  created_at: string
 }
 
 export interface AdminUserDetail {
@@ -246,7 +272,9 @@ export interface AdminUserDetail {
     days: PlanDay[]
   }>
   workout_history: AdminWorkoutSessionSummary[]
+  workout_sets: WorkoutSet[]
   weight_history: BodyRecord[]
+  llm_generations: LlmGeneration[]
 }
 
 export interface AdminStatistics {

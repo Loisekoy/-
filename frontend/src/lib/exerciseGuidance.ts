@@ -1,4 +1,5 @@
 import type { Exercise, PlanDay, PlanExercise } from '../api/types'
+import type { Language } from '../i18n'
 
 const FALLBACK_IMAGES: Record<string, string> = {
   chest: '/exercise-images/chest.svg',
@@ -42,7 +43,19 @@ export function getExerciseImageSrc(exercise: Exercise): string {
   )
 }
 
-export function getExerciseInstructions(exercise: Exercise): string[] {
+export function getExerciseDisplayName(exercise: Exercise, language: Language): string {
+  if (language === 'en') return exercise.exercise_name_en || exercise.exercise_name
+  return exercise.exercise_name_zh || exercise.exercise_name
+}
+
+export function getExerciseDescription(exercise: Exercise, language: Language): string {
+  if (language === 'en') return exercise.description_en || exercise.description
+  return exercise.description_zh || exercise.description
+}
+
+export function getExerciseInstructions(exercise: Exercise, language: Language = 'zh-TW'): string[] {
+  if (language === 'en' && exercise.instructions_en.length > 0) return exercise.instructions_en
+  if (language === 'zh-TW' && exercise.instructions_zh.length > 0) return exercise.instructions_zh
   return exercise.instructions.length > 0 ? exercise.instructions : getExerciseCues(exercise)
 }
 
@@ -52,7 +65,10 @@ export function getPrimaryMuscles(exercise: Exercise): string[] {
     : [exercise.body_part.name_en]
 }
 
-export function getExerciseObjective(exercise: Exercise): string {
+export function getExerciseObjective(exercise: Exercise, language: Language = 'zh-TW'): string {
+  if (language === 'en') {
+    return `Train ${exercise.body_part.name_en.toLowerCase()} with controlled tempo and safe technique.`
+  }
   return BODY_PART_OBJECTIVES[exercise.body_part.body_part_code] ?? '以安全、穩定、可控制的節奏完成每一次動作。'
 }
 
@@ -64,8 +80,17 @@ export function getExerciseCues(exercise: Exercise): string[] {
   ]
 }
 
-export function getIntensityTip(item: PlanExercise): string {
+export function getIntensityTip(item: PlanExercise, language: Language = 'zh-TW'): string {
   const { difficulty_level: difficulty, movement_type: movement } = item.exercise
+  if (language === 'en') {
+    if (difficulty === 'beginner') {
+      return `Choose a weight you can control for ${item.target_reps} reps with 2–3 reps in reserve.`
+    }
+    if (movement === 'compound') {
+      return 'This is a main compound lift. Challenge the load, but keep 1–2 reps in reserve.'
+    }
+    return 'This is an accessory movement. Prioritize muscle control over heavy load.'
+  }
   if (difficulty === 'beginner') {
     return `建議用可以穩定完成 ${item.target_reps} 下、最後仍保留 2–3 下餘力的重量。`
   }
@@ -75,14 +100,22 @@ export function getIntensityTip(item: PlanExercise): string {
   return '這是輔助或孤立動作，重量不用太重，優先感受目標肌群收縮。'
 }
 
-export function getExerciseRole(item: PlanExercise, index: number): string {
+export function getExerciseRole(item: PlanExercise, index: number, language: Language = 'zh-TW'): string {
+  if (language === 'en') {
+    if (index === 0 && item.exercise.movement_type === 'compound') return "Today's main lift"
+    if (item.exercise.movement_type === 'compound') return 'Compound training'
+    return 'Accessory training'
+  }
   if (index === 0 && item.exercise.movement_type === 'compound') return '今日主要動作'
   if (item.exercise.movement_type === 'compound') return '複合訓練'
   return '輔助訓練'
 }
 
-export function getDayObjective(day: PlanDay): string {
+export function getDayObjective(day: PlanDay, language: Language = 'zh-TW'): string {
   const focus = day.focus_summary.replaceAll('＋', '、')
   const mainExercise = day.exercises.find((item) => item.exercise.movement_type === 'compound') ?? day.exercises[0]
+  if (language === 'en') {
+    return `Today's focus is ${focus}. Start with ${getExerciseDisplayName(mainExercise.exercise, language)}, then add accessory work to complete the training volume.`
+  }
   return `今天主要訓練 ${focus}。先完成 ${mainExercise.exercise.exercise_name} 這類主要動作，再接續輔助動作補足訓練量。`
 }

@@ -27,6 +27,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/plan" element={<PlanPage />} />
+          <Route path="/workout/session/:sessionId" element={<ActiveWorkoutPage />} />
           <Route path="/workout/:planDayId" element={<ActiveWorkoutPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />

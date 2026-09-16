@@ -1,17 +1,19 @@
-import { ArrowLeft, CalendarDays, Dumbbell, Scale, UserRound } from 'lucide-react'
+import { ArrowLeft, BrainCircuit, CalendarDays, Dumbbell, ListChecks, Scale, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError, adminRequest } from '../api/client'
 import type { AdminUserDetail } from '../api/types'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { LoadingScreen } from '../components/LoadingScreen'
+import { useI18n } from '../i18n'
 import { parseApiDate } from '../lib/datetime'
-import { getExerciseImageSrc } from '../lib/exerciseGuidance'
+import { getExerciseDisplayName, getExerciseImageSrc } from '../lib/exerciseGuidance'
 import { clearAdminToken, getAdminToken } from '../lib/storage'
 
 export default function AdminUserDetailPage() {
   const { userId } = useParams()
   const navigate = useNavigate()
+  const { language } = useI18n()
   const [detail, setDetail] = useState<AdminUserDetail | null>(null)
   const [error, setError] = useState('')
 
@@ -130,7 +132,7 @@ export default function AdminUserDetailPage() {
                       {day.exercises.map((item) => (
                         <li key={item.plan_exercise_id}>
                           <img src={getExerciseImageSrc(item.exercise)} alt="" />
-                          <span>{item.exercise.exercise_name}</span>
+                          <span>{getExerciseDisplayName(item.exercise, language)}</span>
                           <small>{item.target_sets} × {item.target_reps}・{item.rest_seconds}s</small>
                         </li>
                       ))}
@@ -140,6 +142,31 @@ export default function AdminUserDetailPage() {
               </div>
             </article>
           )) : <p className="admin-empty">這位使用者尚未產生課表。</p>}
+        </div>
+      </section>
+
+      <section className="admin-card">
+        <div className="section-heading">
+          <h2><BrainCircuit size={20} />LLM Generations</h2>
+          <p>{detail.llm_generations.length} records</p>
+        </div>
+        <div className="admin-table" role="table" aria-label="LLM generation records">
+          <div className="admin-table__header" role="row">
+            <span>Status</span>
+            <span>Provider / Model</span>
+            <span>Fallback</span>
+            <span>Created</span>
+            <span>Error</span>
+          </div>
+          {detail.llm_generations.length ? detail.llm_generations.map((generation) => (
+            <div className="admin-table__row" role="row" key={generation.llm_generation_id}>
+              <strong>{generation.status}</strong>
+              <span>{generation.provider} / {generation.model}</span>
+              <span>{generation.used_fallback ? 'Yes' : 'No'}</span>
+              <time>{parseApiDate(generation.created_at).toLocaleString('zh-TW')}</time>
+              <span>{generation.error_message ?? generation.response_summary ?? '—'}</span>
+            </div>
+          )) : <p className="admin-empty">尚未有 LLM 產生紀錄。</p>}
         </div>
       </section>
 
@@ -162,9 +189,34 @@ export default function AdminUserDetailPage() {
               <span>{session.status}</span>
               <span>{session.set_count}</span>
               <span>{session.volume_kg.toLocaleString()} kg</span>
-              <time>{parseApiDate(session.started_at).toLocaleString('zh-TW')}</time>
+              <time>{parseApiDate(session.completed_at ?? session.started_at).toLocaleString('zh-TW')}</time>
             </div>
           )) : <p className="admin-empty">尚未有訓練紀錄。</p>}
+        </div>
+      </section>
+
+      <section className="admin-card">
+        <div className="section-heading">
+          <h2><ListChecks size={20} />Workout Sets</h2>
+          <p>{detail.workout_sets.length} rows</p>
+        </div>
+        <div className="admin-table" role="table" aria-label="Workout sets">
+          <div className="admin-table__header" role="row">
+            <span>Exercise</span>
+            <span>Set</span>
+            <span>Weight</span>
+            <span>Reps</span>
+            <span>Logged</span>
+          </div>
+          {detail.workout_sets.length ? detail.workout_sets.map((set) => (
+            <div className="admin-table__row" role="row" key={set.workout_set_id}>
+              <strong>{getExerciseDisplayName(set.exercise, language)}</strong>
+              <span>#{set.set_number}</span>
+              <span>{set.weight_kg} kg</span>
+              <span>{set.reps}</span>
+              <time>{parseApiDate(set.logged_at).toLocaleString('zh-TW')}</time>
+            </div>
+          )) : <p className="admin-empty">尚未有 workout_sets 資料。</p>}
         </div>
       </section>
     </main>

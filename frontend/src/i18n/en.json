@@ -1,0 +1,86 @@
+{
+  "app": {
+    "loading": "Loading",
+    "publicSite": "Public Site",
+    "language": "Language"
+  },
+  "nav": {
+    "plan": "My Plan",
+    "startWorkout": "Start Workout",
+    "history": "History",
+    "dashboard": "Dashboard",
+    "database": "Database",
+    "profile": "Profile",
+    "admin": "Admin",
+    "users": "Users",
+    "statistics": "Statistics",
+    "exercises": "Exercises",
+    "logout": "Logout",
+    "startNow": "Start now"
+  },
+  "home": {
+    "title": "Fitness training starts with a plan that fits you.",
+    "subtitle": "Enter your profile, goal, and priority body parts. The system selects candidate exercises from the database, then uses an LLM or rule-based fallback to generate an actionable plan.",
+    "primaryNew": "Build my fitness plan",
+    "primaryExisting": "Continue my plan",
+    "secondaryNew": "View database system",
+    "secondaryExisting": "Create new profile",
+    "privacy": "No login or password required. The browser stores only an anonymous user_id; avoid entering sensitive personal data.",
+    "stepsTitle": "Flow",
+    "steps": [
+      "Create user profile",
+      "Choose training goal",
+      "Select priority body parts",
+      "Generate AI workout plan",
+      "Start workout and save every set"
+    ]
+  },
+  "onboarding": {
+    "steps": ["Basic Profile", "Fitness Goal", "Experience", "Training Days", "Session Duration", "Priority Body Parts"],
+    "buttonNext": "Next",
+    "buttonBack": "Back",
+    "buttonGenerate": "Generate my plan with AI",
+    "generating": "Generating plan…",
+    "name": "Name",
+    "gender": "Gender (optional)",
+    "age": "Age",
+    "height": "Height",
+    "weight": "Weight",
+    "goalHelp": "Choose your main training goal.",
+    "experienceHelp": "Experience affects exercise difficulty, volume, and recovery.",
+    "bodyHelp": "Choose one or more. Priority areas get more frequency without ignoring other major muscle groups.",
+    "scheduleHelp": "Choose the number of days you can realistically train each week.",
+    "durationHelp": "Longer sessions can include more exercises per day.",
+    "reviewHelp": "The app creates your profile and first body record, then generates your workout plan."
+  },
+  "plan": {
+    "title": "My Workout Plan",
+    "subtitle": "See today's focus, reference images, target sets, reps, and rest time.",
+    "mainTask": "Today's main task",
+    "targetVolume": "Target volume",
+    "startDay": "Start workout",
+    "regenerate": "Regenerate plan",
+    "loading": "Loading workout plan",
+    "aiBadge": "AI / DB validated plan",
+    "fallbackBadge": "Rule-based fallback"
+  },
+  "workout": {
+    "loading": "Preparing workout",
+    "missing": "No active workout found",
+    "close": "Close workout",
+    "duration": "Duration",
+    "current": "Current exercise",
+    "set": "Set",
+    "weight": "Weight (kg)",
+    "reps": "Reps",
+    "status": "Status",
+    "saveSet": "Complete and save set",
+    "nextExercise": "Next exercise",
+    "finish": "Complete today's workout",
+    "rest": "Rest timer",
+    "skipRest": "Skip rest",
+    "summary": "Workout complete",
+    "history": "View history",
+    "home": "Home"
+  }
+}

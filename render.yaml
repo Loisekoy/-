@@ -23,6 +23,14 @@ services:
         value: https://oss.exercisedb.dev/api/v1/exercises
       - key: EXERCISEDB_SYNC_ON_SEED
         value: "true"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+      - key: LLM_FORCE_FAILURE
+        value: "false"
+      - key: LLM_TIMEOUT_SECONDS
+        value: "25"
       - key: CORS_ORIGINS
         value: ""
 

@@ -114,6 +114,90 @@ FALLBACK_DETAIL_BY_BODY_PART = {
     },
 }
 
+BODY_PART_INSTRUCTIONS_ZH = {
+    "chest": [
+        "開始前先將肩胛微收並下沉，讓上背穩定。",
+        "下放重量時保持控制，停在胸口附近或可控制的位置。",
+        "吐氣推回起始位置，手肘維持穩定不要過度外張。",
+    ],
+    "back": [
+        "先讓肩胛往後往下，再用手肘帶動拉的方向。",
+        "保持胸口打開與軀幹穩定，不要聳肩或圓背。",
+        "回放時慢慢控制，感受背部被拉長。",
+    ],
+    "shoulders": [
+        "核心收緊，肋骨不要外翻，保持身體穩定。",
+        "以順暢、無疼痛的活動範圍完成動作。",
+        "頂端不要聳肩，回放時保持控制。",
+    ],
+    "biceps": [
+        "手肘靠近身體兩側並盡量固定。",
+        "彎舉時不要用身體甩動借力。",
+        "下放到手臂接近伸直，維持張力。",
+    ],
+    "triceps": [
+        "上臂保持穩定，動作主要來自手肘伸展。",
+        "將手臂伸直到接近打直，感受三頭肌收縮。",
+        "回放時控制速度，不要讓重量快速彈回。",
+    ],
+    "legs": [
+        "腳掌踩穩，膝蓋方向與腳尖一致。",
+        "下放時保持軀幹穩定與可控制速度。",
+        "推起時不要讓膝蓋內夾，完整完成每一次。",
+    ],
+    "glutes": [
+        "先收緊核心，再由髖部發力啟動動作。",
+        "頂端夾臀，但不要過度拱腰。",
+        "下放時保持髖部穩定，避免左右歪斜。",
+    ],
+    "core": [
+        "保持自然呼吸，不要憋氣。",
+        "維持腰椎中立，避免塌腰或過度拱背。",
+        "如果下背出現尖銳疼痛，請立即停止。",
+    ],
+}
+
+EXERCISE_ZH_NAMES = {
+    "Push-Up": "伏地挺身",
+    "Machine Chest Press": "器械胸推",
+    "Bench Press": "槓鈴臥推",
+    "Incline Dumbbell Press": "上斜啞鈴臥推",
+    "Cable Fly": "滑輪夾胸",
+    "Lat Pulldown": "高位下拉",
+    "Seated Cable Row": "坐姿滑輪划船",
+    "Assisted Pull-Up": "輔助引體向上",
+    "Barbell Row": "槓鈴划船",
+    "Pull-Up": "引體向上",
+    "Machine Shoulder Press": "器械肩推",
+    "Lateral Raise": "啞鈴側平舉",
+    "Face Pull": "滑輪面拉",
+    "Dumbbell Shoulder Press": "啞鈴肩推",
+    "Arnold Press": "阿諾肩推",
+    "Dumbbell Curl": "啞鈴彎舉",
+    "Cable Curl": "滑輪彎舉",
+    "Hammer Curl": "錘式彎舉",
+    "Barbell Curl": "槓鈴彎舉",
+    "Triceps Pushdown": "滑輪三頭下壓",
+    "Overhead Triceps Extension": "過頭三頭伸展",
+    "Close-Grip Bench Press": "窄握臥推",
+    "Skull Crusher": "仰臥三頭伸展",
+    "Bodyweight Squat": "徒手深蹲",
+    "Goblet Squat": "高腳杯深蹲",
+    "Leg Press": "腿推",
+    "Leg Curl": "腿彎舉",
+    "Barbell Squat": "槓鈴深蹲",
+    "Romanian Deadlift": "羅馬尼亞硬舉",
+    "Glute Bridge": "臀橋",
+    "Cable Kickback": "滑輪後踢",
+    "Hip Thrust": "臀推",
+    "Bulgarian Split Squat": "保加利亞分腿蹲",
+    "Plank": "平板支撐",
+    "Dead Bug": "死蟲式",
+    "Crunch": "捲腹",
+    "Russian Twist": "俄羅斯轉體",
+    "Hanging Leg Raise": "懸垂抬腿",
+}
+
 EXERCISES = [
     ("Push-Up", "chest", "beginner", "bodyweight", "compound", "徒手胸推動作。"),
     ("Machine Chest Press", "chest", "beginner", "machine", "compound", "器械胸推。"),
@@ -215,6 +299,7 @@ def _apply_exercisedb_details(db: Session) -> None:
             match.get("secondaryMuscles") or exercise.secondary_muscles
         )
         exercise.instructions = match.get("instructions") or exercise.instructions
+        exercise.instructions_en = match.get("instructions") or exercise.instructions_en
 
 
 def _seed_admin(db: Session) -> None:
@@ -268,23 +353,41 @@ def seed_database(db: Session) -> None:
     for name, part_code, difficulty, equipment, movement, description in EXERCISES:
         image_url = BODY_PART_IMAGE_URLS[part_code]
         fallback_detail = FALLBACK_DETAIL_BY_BODY_PART[part_code]
+        instructions_zh = BODY_PART_INSTRUCTIONS_ZH[part_code]
+        exercise_name_zh = EXERCISE_ZH_NAMES.get(name, name)
         existing_exercise = existing_exercises.get(name)
         if existing_exercise is None:
             db.add(
                 Exercise(
                     exercise_name=name,
+                    exercise_name_en=name,
+                    exercise_name_zh=exercise_name_zh,
                     body_part_id=part_ids[part_code],
                     difficulty_level=difficulty,
                     equipment=equipment,
                     movement_type=movement,
                     description=description,
+                    description_en=f"{name} for {part_code} training.",
+                    description_zh=description,
                     image_url=image_url,
                     target_muscles=fallback_detail["target_muscles"],
                     secondary_muscles=fallback_detail["secondary_muscles"],
                     instructions=fallback_detail["instructions"],
+                    instructions_en=fallback_detail["instructions"],
+                    instructions_zh=instructions_zh,
+                    coaching_notes_en="Use a controlled tempo and stop if sharp pain occurs.",
+                    coaching_notes_zh="以可控制的節奏完成動作；若出現尖銳疼痛請停止。",
                 )
             )
         else:
+            existing_exercise.exercise_name_en = existing_exercise.exercise_name_en or name
+            existing_exercise.exercise_name_zh = (
+                existing_exercise.exercise_name_zh or exercise_name_zh
+            )
+            existing_exercise.description_en = (
+                existing_exercise.description_en or f"{name} for {part_code} training."
+            )
+            existing_exercise.description_zh = existing_exercise.description_zh or description
             existing_exercise.image_url = existing_exercise.image_url or image_url
             existing_exercise.target_muscles = (
                 existing_exercise.target_muscles or fallback_detail["target_muscles"]
@@ -294,6 +397,18 @@ def seed_database(db: Session) -> None:
             )
             existing_exercise.instructions = (
                 existing_exercise.instructions or fallback_detail["instructions"]
+            )
+            existing_exercise.instructions_en = (
+                existing_exercise.instructions_en or fallback_detail["instructions"]
+            )
+            existing_exercise.instructions_zh = existing_exercise.instructions_zh or instructions_zh
+            existing_exercise.coaching_notes_en = (
+                existing_exercise.coaching_notes_en
+                or "Use a controlled tempo and stop if sharp pain occurs."
+            )
+            existing_exercise.coaching_notes_zh = (
+                existing_exercise.coaching_notes_zh
+                or "以可控制的節奏完成動作；若出現尖銳疼痛請停止。"
             )
     if get_settings().exercisedb_sync_on_seed:
         _apply_exercisedb_details(db)

@@ -35,7 +35,7 @@ Public user flow 沒有 Authentication，代表系統不能證明誰是資料擁
 | FR-02 | Initial weight | 建立 Profile 時同一個 transaction 寫入第一筆 `body_records` |
 | FR-03 | Training goal | 從四種 `training_goals` 選擇一個主要目標 |
 | FR-04 | Preferred body parts | 透過 `user_body_parts` 選擇一個或多個部位 |
-| FR-05 | Availability | 選擇每週 2–6 天及每次 30／60／90 分鐘 |
+| FR-05 | Availability | 選擇每週 2–6 天及每次 30／45／60／90 分鐘 |
 | FR-06 | Exercise database | 依名稱、部位、難度、器材搜尋與管理 Exercise |
 | FR-07 | Plan generation | 只用資料庫資料及 rule-based algorithm 產生建議課表 |
 | FR-08 | Plan structure | 課表包含多個 Day；每個 Day 有排序過的 Exercises 與 Sets／Reps |
@@ -346,7 +346,7 @@ Stores anonymous fitness profiles. It contains no email, username, password, or 
 | `training_experience` | `VARCHAR(20)` | No | CHECK: `beginner`, `intermediate`, `advanced` |
 | `training_goal_id` | `SMALLINT` | No | FK → `training_goals.training_goal_id` |
 | `training_days_per_week` | `SMALLINT` | No | CHECK `IN (2,3,4,5,6)` |
-| `training_duration_minutes` | `SMALLINT` | No | CHECK `IN (30,60,90)` |
+| `training_duration_minutes` | `SMALLINT` | No | CHECK `IN (30,45,60,90)` |
 | `created_at` | `TIMESTAMPTZ` | No | Default current time |
 | `updated_at` | `TIMESTAMPTZ` | No | Updated whenever the row changes |
 
@@ -385,17 +385,25 @@ Shared Exercise Database.
 |---|---|---:|---|
 | `exercise_id` | `BIGINT GENERATED AS IDENTITY` | No | PK |
 | `exercise_name` | `VARCHAR(120)` | No | Case-insensitive UNIQUE |
+| `exercise_name_en` | `VARCHAR(120)` | Yes | English display name |
+| `exercise_name_zh` | `VARCHAR(120)` | Yes | Traditional Chinese display name |
 | `body_part_id` | `SMALLINT` | No | FK → `body_parts.body_part_id` |
 | `difficulty_level` | `VARCHAR(20)` | No | CHECK: `beginner`, `intermediate`, `advanced` |
 | `equipment` | `VARCHAR(80)` | No | Example: barbell, dumbbell, machine, bodyweight |
 | `movement_type` | `VARCHAR(20)` | No | CHECK: `compound`, `isolation` |
 | `description` | `TEXT` | No | Exercise description |
+| `description_en` | `TEXT` | Yes | English description |
+| `description_zh` | `TEXT` | Yes | Traditional Chinese description |
 | `image_url` | `VARCHAR(255)` | Yes | Reference image path or URL for plan/workout display |
 | `external_exercise_id` | `VARCHAR(80)` | Yes | UNIQUE external ExerciseDB / AscendAPI ID |
 | `gif_url` | `VARCHAR(500)` | Yes | Optional GIF demonstration URL |
 | `target_muscles` | `JSON` | No | Ordered display metadata from ExerciseDB; default `[]` |
 | `secondary_muscles` | `JSON` | No | Ordered display metadata from ExerciseDB; default `[]` |
 | `instructions` | `JSON` | No | Ordered step-by-step instruction text; default `[]` |
+| `instructions_en` | `JSON` | No | English instruction text; default `[]` |
+| `instructions_zh` | `JSON` | No | Traditional Chinese instruction text; default `[]` |
+| `coaching_notes_en` | `TEXT` | Yes | Optional English coaching note |
+| `coaching_notes_zh` | `TEXT` | Yes | Optional Traditional Chinese coaching note |
 | `is_active` | `BOOLEAN` | No | Default `true` |
 | `created_at` | `TIMESTAMPTZ` | No | Default current time |
 | `updated_at` | `TIMESTAMPTZ` | No | Updated whenever the row changes |
@@ -413,8 +421,8 @@ Stores a generated plan and a snapshot of the settings used to generate it.
 | `training_goal_id` | `SMALLINT` | No | FK → `training_goals.training_goal_id` |
 | `plan_name` | `VARCHAR(120)` | No | Non-empty |
 | `training_days_per_week` | `SMALLINT` | No | CHECK `IN (2,3,4,5,6)` |
-| `training_duration_minutes` | `SMALLINT` | No | CHECK `IN (30,60,90)` |
-| `algorithm_version` | `VARCHAR(30)` | No | Example: `rules-v1` |
+| `training_duration_minutes` | `SMALLINT` | No | CHECK `IN (30,45,60,90)` |
+| `algorithm_version` | `VARCHAR(30)` | No | Example: `llm-openai:gpt-4.1-mini`, `rules-v1-fallback` |
 | `status` | `VARCHAR(20)` | No | CHECK: `generated`, `active`, `archived` |
 | `generated_at` | `TIMESTAMPTZ` | No | Default current time |
 
@@ -456,9 +464,10 @@ Represents one actual workout and stores its direct User owner. Source Plan info
 | `session_id` | `BIGINT GENERATED AS IDENTITY` | No | PK |
 | `user_id` | `UUID` | No | FK → `users.user_id` |
 | `session_name` | `VARCHAR(120)` | No | Historical display label |
-| `status` | `VARCHAR(20)` | No | CHECK: `in_progress`, `completed`, `cancelled` |
+| `status` | `VARCHAR(20)` | No | CHECK: `in_progress`, `completed`, `abandoned`, `cancelled` |
 | `started_at` | `TIMESTAMPTZ` | No | Start timestamp |
 | `ended_at` | `TIMESTAMPTZ` | Yes | Required when completed; `>= started_at` |
+| `completed_at` | `TIMESTAMPTZ` | Yes | Set when status becomes `completed` |
 | `notes` | `TEXT` | Yes | Session notes |
 
 ### 5.10 `session_plan_days`
@@ -506,6 +515,23 @@ Stores the initial Weight and later Weight History.
 
 Candidate key: (`user_id`, `recorded_on`).
 
+### 5.13 `llm_generations`
+
+Audit table for LLM workout-plan generation attempts. It stores provider/model/status metadata and non-sensitive summaries, but never stores API keys.
+
+| Column | PostgreSQL type | Null | Key / constraint |
+|---|---|---:|---|
+| `llm_generation_id` | `BIGINT GENERATED AS IDENTITY` | No | PK |
+| `user_id` | `UUID` | No | FK → `users.user_id` |
+| `provider` | `VARCHAR(40)` | No | Example: `openai` |
+| `model` | `VARCHAR(80)` | No | Example: `gpt-4.1-mini` |
+| `status` | `VARCHAR(20)` | No | CHECK: `success`, `failed`, `fallback` |
+| `used_fallback` | `BOOLEAN` | No | Whether rule-based fallback was used |
+| `prompt_summary` | `TEXT` | Yes | Non-sensitive input summary |
+| `response_summary` | `TEXT` | Yes | Non-sensitive result summary |
+| `error_message` | `TEXT` | Yes | API/validation failure reason |
+| `created_at` | `TIMESTAMPTZ` | No | Default current time |
+
 ## 6. Primary Keys, Foreign Keys, and Relationships
 
 | Parent | Child foreign key | Relationship | Delete action | Reason |
@@ -525,6 +551,7 @@ Candidate key: (`user_id`, `recorded_on`).
 | `workout_sessions` | `workout_sets.session_id` | 1:N | CASCADE | Set has no meaning without Session |
 | `exercises` | `workout_sets.exercise_id` | 1:N | RESTRICT | Preserve historical meaning |
 | `users` | `body_records.user_id` | 1:N | CASCADE | Weight data belongs to profile |
+| `users` | `llm_generations.user_id` | 1:N | CASCADE | LLM audit rows belong to profile |
 
 The M:N User–Body Part relationship is represented by two 1:N relationships through `user_body_parts`.
 
@@ -557,10 +584,12 @@ PostgreSQL automatically indexes PK and UNIQUE constraints. The following additi
 | `workout_sets` | UNIQUE (`session_id`, `exercise_id`, `set_number`) | Per-Exercise Set number |
 | `workout_sets` | index (`exercise_id`, `logged_at`) | Exercise History and popularity |
 | `body_records` | UNIQUE (`user_id`, `recorded_on`) | One Weight entry per day |
+| `llm_generations` | index (`user_id`, `created_at` DESC) | Admin audit history |
+| `llm_generations` | index (`status`) | LLM success/failure/fallback reporting |
 
 Important database-level checks:
 
-- A User has 2–6 days and 30／60／90 minutes.
+- A User has 2–6 days and 30／45／60／90 minutes.
 - A generated Plan contains exactly the declared number of Plan Days before it becomes active.
 - A User must have at least one `user_body_parts` row before plan generation.
 - A completed Session has a valid end time.
@@ -624,8 +653,9 @@ The algorithm reads:
 - preferred parts from `user_body_parts`
 - active Exercises joined with `body_parts`
 - base sets, reps, and rest from `training_goals`
+- optional LLM provider configuration from backend environment variables
 
-It does not call an AI API or external recommendation service.
+The production workflow tries DB Exercise Library + LLM Recommendation first. The LLM output is accepted only after backend validation. If `OPENAI_API_KEY` is missing, the API fails, or validation fails, the system falls back to the deterministic rule-based algorithm described below and records the attempt in `llm_generations`.
 
 ### 9.2 Weekly split rules
 
@@ -652,6 +682,7 @@ Before adding preference bonuses, the generated week must cover Chest, Back, Sho
 | Session duration | Maximum Exercises per Plan Day |
 |---:|---:|
 | 30 minutes | 4 |
+| 45 minutes | 5 |
 | 60 minutes | 6 |
 | 90 minutes | 8 |
 
@@ -692,17 +723,15 @@ Sort by score descending, then by `exercise_id` ascending for deterministic tie-
 ### 9.7 Generation procedure
 
 1. Validate User, Goal, Days, Duration, and at least one Preferred Body Part.
-2. Load the weekly split rule.
-3. Calculate the Exercise capacity per day.
-4. Reserve slots that guarantee weekly coverage of the six major regions defined above.
-5. Allocate extra frequency to Preferred Body Parts.
-6. Query eligible active Exercises by Body Part and Experience.
-7. Score and select Exercises.
-8. Apply Goal prescription and Beginner set cap.
-9. In one transaction, archive the prior active Plan and insert `workout_plans`, `plan_days`, and `plan_exercises`.
-10. Verify day count, same-day uniqueness, coverage, and capacity before setting the new Plan to `active`.
+2. Query active Exercise candidates from the database.
+3. If `OPENAI_API_KEY` exists, send only candidate Exercise IDs and profile metadata to the LLM.
+4. Require structured JSON from the LLM.
+5. Validate Exercise IDs, day count, same-day uniqueness, sets, reps, rest, and duration capacity.
+6. If valid, archive the prior active Plan and insert `workout_plans`, `plan_days`, and `plan_exercises`.
+7. If the LLM is unavailable or invalid, record `llm_generations.status` and use the deterministic rule-based fallback.
+8. Set the new Plan to `active`.
 
-The generated Plan stores `algorithm_version = 'rules-v1'`, allowing future rule changes without making older plans impossible to explain.
+Generated plans store `algorithm_version`, for example `llm-openai:gpt-4.1-mini` or `rules-v1-fallback`, allowing future changes without making older plans impossible to explain.
 
 ### 9.8 Example outcome
 
@@ -766,7 +795,7 @@ The schema satisfies 3NF for the stated business rules. No denormalized summary 
 
 - [x] Revised no-login System Requirements documented.
 - [x] First-time and returning User Flow documented.
-- [x] ER Diagram revised to 13 tables, including the 11 requested public tables plus `session_plan_days` and protected `admins`.
+- [x] ER Diagram revised to 14 tables, including the 11 requested public tables plus `session_plan_days`, protected `admins`, and `llm_generations`.
 - [x] Columns and PostgreSQL data types defined.
 - [x] Primary Keys and Foreign Keys defined.
 - [x] 1:N and M:N Relationships defined.
@@ -774,7 +803,7 @@ The schema satisfies 3NF for the stated business rules. No denormalized summary 
 - [x] Constraints and Indexes planned.
 - [x] Search, JOIN, GROUP BY, aggregates, History, and Dashboard mapped.
 - [x] 3NF reviewed.
-- [x] Rule-based Workout Recommendation Algorithm specified without AI API.
+- [x] LLM Recommendation workflow specified with backend validation and rule-based fallback.
 - [x] Admin backend added with protected login, dashboard, users, detail, statistics, and exercise database.
 - [x] Exercise GIF/image/instructions metadata added with local fallback.
 - [x] Cloud env variables documented without committing secrets.

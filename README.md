@@ -1,65 +1,71 @@
 # Fitness Tracking Management System
 
-免登入的全端健身紀錄管理系統。訪客可直接建立匿名基本資料，選擇訓練目標與重點部位，取得規則式推薦課表，記錄每一組 Weight / Reps，並透過 Dashboard 查看 Training Volume、訓練頻率與體重歷史。
+免登入的 Full-stack Database Web Application。使用者只要透過公開網址進入，就可以建立匿名基本資料、選擇健身目標與想加強部位，系統會從資料庫找候選 Exercise，再透過 LLM 產生課表；若 LLM API 沒設定或失敗，後端會自動使用 rule-based fallback，確保功能仍可用。
 
-> Public user website 依需求刻意不提供 Login、Register、Email 或 Password。瀏覽器只保存匿名 `user_id`；清除瀏覽器資料後無法復原識別碼。管理者後台 `/admin` 是獨立入口，使用雲端環境變數建立的 admin 帳號與 hashed password，不會把密碼寫入前端或 GitHub。
+> Public website 不提供 Login / Register / Email / Password。瀏覽器只保存 anonymous `user_id` 與語言偏好；所有訓練資料、課表與紀錄都存在 Cloud PostgreSQL。
 
 ## Project Description
 
 主要功能：
 
-- 五步驟匿名建檔流程
-- Rule-Based Workout Recommendation（不使用 AI API）
-- 詳細 Workout Plan：今日主要任務、每個動作參考圖片、動作重點、重量建議、目標組數／次數修改
-- Workout Session 與每組 Weight / Reps 紀錄
-- Workout、Exercise、Body Weight History
-- Dashboard：Training Volume、工作組數、訓練次數、最常訓練部位與最常使用動作
-- Exercise detail：資料庫可保存 GIF/image、target muscles、secondary muscles 與 step-by-step instructions；若 ExerciseDB API 不可用會使用本地 fallback 圖片與動作說明
-- Admin Backend：`/admin/login`、Dashboard、Users、User Detail、Statistics、Exercise Database
-- Database System 展示頁：Schema、PK/FK、Relationships、row counts、JOIN / GROUP BY / Aggregate 查詢結果
-- 使用者、體重、課表、訓練紀錄的 CRUD API；Exercise 管理 API 由 admin token 保護
-- 桌機與手機響應式介面
+- 6-step onboarding：基本資料、健身目標、訓練經驗、每週天數、訓練時間、想加強部位
+- DB Exercise Library + LLM Recommendation + Backend Validation
+- LLM 只能使用資料庫中的 `exercise_id`，不可憑空產生不存在的動作
+- LLM API 失敗時自動 fallback 到 rule-based algorithm
+- 詳細 Workout Plan：今日主要任務、參考 GIF / 圖片、肌群、器材、難度、步驟、組數、次數、休息時間
+- Workout Mode：每一組 Weight / Reps 完成後立即寫入 `workout_sets`
+- Session resume：重新整理 `/workout/session/:id` 可恢復進行中的訓練
+- Rest timer、Add Set、Next Exercise、Completion Summary
+- Workout History、Exercise History、Training Volume、Body Weight History
+- Dashboard：每週訓練次數、總訓練量、最常訓練部位、最常使用 Exercise
+- Admin backend：Dashboard、Users、User Detail、Statistics、Exercise Database
+- Database System 展示頁：schema、row counts、PK/FK、JOIN、GROUP BY、Aggregate queries
+- i18n：右上角可切換繁體中文 / English，預設繁中
+- RWD：手機與電腦都可使用
 
-技術架構：
+## System Architecture
+
+```mermaid
+flowchart TD
+    U["Public User Browser<br/>No login required"] --> FE["React SPA"]
+    FE --> API["FastAPI Backend"]
+    API --> DB[("Cloud PostgreSQL")]
+    API -->|optional| OAI["OpenAI API<br/>OPENAI_API_KEY"]
+    API --> EXDB["ExerciseDB OSS API<br/>optional GIF sync"]
+    Admin["Admin Browser"] --> FE
+    FE --> AdminAPI["/api/admin/*"]
+    AdminAPI --> DB
+```
+
+技術：
 
 - Frontend：React、TypeScript、Vite、React Router、Recharts
 - Backend：FastAPI、SQLAlchemy 2、Pydantic
 - Database：PostgreSQL、Alembic migrations
-- Deployment：Docker + Render Blueprint；Render 會建立 Web Service 與 Cloud PostgreSQL
+- Deployment：Docker + Render Blueprint + Render managed PostgreSQL
 
-```mermaid
-flowchart LR
-    B["Public Browser"] -->|"HTTPS"| A["FastAPI Web Service"]
-    A -->|"serves"| F["React SPA"]
-    F -->|"same-origin /api"| A
-    A -->|"SQLAlchemy + psycopg"| P[("Cloud PostgreSQL")]
-```
+## Database Architecture
 
-## Database Design
+目前核心資料表：
 
-資料庫共 13 張資料表：
+| Table | Purpose |
+|---|---|
+| `admins` | Admin login account，password 只存 hash |
+| `users` | 匿名使用者基本資料與訓練偏好 |
+| `training_goals` | Muscle Gain / Fat Loss / Strength / General Fitness |
+| `body_parts` | Chest / Back / Shoulders / Biceps / Triceps / Legs / Glutes / Core |
+| `user_body_parts` | User 與 Body Part 的 M:N junction table |
+| `exercises` | Exercise library，中英名稱、GIF、肌群、步驟、器材、難度 |
+| `workout_plans` | 產生出的週課表 |
+| `plan_days` | 課表中的 Day 1 / Day 2 / ... |
+| `plan_exercises` | 每天的動作與 target sets / reps / rest |
+| `workout_sessions` | 實際開始的訓練 session |
+| `session_plan_days` | session 對應哪一天課表 |
+| `workout_sets` | 每組實際 weight / reps |
+| `body_records` | 體重歷史 |
+| `llm_generations` | LLM 產生課表紀錄、成功/失敗/fallback 狀態 |
 
-| Table | Purpose | Important Keys |
-|---|---|---|
-| `admins` | 管理後台帳號與 hashed password | PK `admin_id`; UK `username` |
-| `training_goals` | 訓練目標與預設處方 | PK `training_goal_id` |
-| `users` | 匿名基本資料與訓練偏好 | PK `user_id`; FK `training_goal_id` |
-| `body_parts` | 標準化身體部位 | PK `body_part_id` |
-| `user_body_parts` | User 與 Body Part 的 M:N junction table | Composite PK/FK |
-| `exercises` | 動作資料庫、參考圖片/GIF、目標肌群與 instructions | PK `exercise_id`; FK `body_part_id`; UK `external_exercise_id` |
-| `workout_plans` | 產生的週課表 | PK `plan_id`; FK `user_id`, `training_goal_id` |
-| `plan_days` | 課表中的訓練日 | PK `plan_day_id`; FK `plan_id` |
-| `plan_exercises` | 每日動作與目標處方 | PK `plan_exercise_id`; FK `plan_day_id`, `exercise_id` |
-| `workout_sessions` | 實際訓練事件 | PK `session_id`; FK `user_id` |
-| `session_plan_days` | Session 的選填課表來源 | PK/FK `session_id`; FK `plan_day_id` |
-| `workout_sets` | 每組實際 Weight / Reps | PK `workout_set_id`; FK `session_id`, `exercise_id` |
-| `body_records` | 體重歷史 | PK `body_record_id`; FK `user_id` |
-
-完整欄位、data types、PK/FK、constraints、indexes、關係、正規化與推薦規則請見 [DATABASE_DESIGN.md](./DATABASE_DESIGN.md)。可執行的 JOIN / GROUP BY / aggregate 範例請見 [SQL_QUERIES.md](./docs/SQL_QUERIES.md)。
-
-網站內也提供 `/database` 頁面，可直接看到目前 cloud database 的 schema、各資料表筆數、PK/FK relationship，以及即時 SQL 查詢結果。
-
-## ER Diagram
+### ER Diagram
 
 ```mermaid
 erDiagram
@@ -67,25 +73,155 @@ erDiagram
         bigint admin_id PK
         varchar username UK
         varchar password_hash
-        boolean is_active
-        timestamptz last_login_at
     }
-    TRAINING_GOALS ||--o{ USERS : selects
-    TRAINING_GOALS ||--o{ WORKOUT_PLANS : snapshots
+    TRAINING_GOALS ||--o{ USERS : selected_by
     USERS ||--o{ USER_BODY_PARTS : chooses
     BODY_PARTS ||--o{ USER_BODY_PARTS : selected_by
     BODY_PARTS ||--o{ EXERCISES : categorizes
     USERS ||--o{ WORKOUT_PLANS : owns
+    TRAINING_GOALS ||--o{ WORKOUT_PLANS : uses
     WORKOUT_PLANS ||--|{ PLAN_DAYS : contains
     PLAN_DAYS ||--|{ PLAN_EXERCISES : schedules
-    EXERCISES ||--o{ PLAN_EXERCISES : assigned_to
+    EXERCISES ||--o{ PLAN_EXERCISES : selected
     USERS ||--o{ WORKOUT_SESSIONS : performs
-    WORKOUT_SESSIONS ||--o| SESSION_PLAN_DAYS : may_source
+    WORKOUT_SESSIONS ||--o| SESSION_PLAN_DAYS : source
     PLAN_DAYS ||--o{ SESSION_PLAN_DAYS : source_for
-    WORKOUT_SESSIONS ||--o{ WORKOUT_SETS : contains
-    EXERCISES ||--o{ WORKOUT_SETS : performed_as
-    USERS ||--o{ BODY_RECORDS : records
+    WORKOUT_SESSIONS ||--o{ WORKOUT_SETS : records
+    EXERCISES ||--o{ WORKOUT_SETS : performed
+    USERS ||--o{ BODY_RECORDS : tracks
+    USERS ||--o{ LLM_GENERATIONS : requests
 ```
+
+資料庫設計重點：
+
+- `user_body_parts` 使用複合主鍵，正確實作 User ↔ Body Part 的 M:N relationship
+- 所有 transaction tables 皆以 FK 連回 parent table
+- `workout_sets` 使用 `session_id + exercise_id + set_number` unique constraint，避免同一動作同一組重複
+- `workout_sessions.status` 支援 `in_progress / completed / abandoned / cancelled`
+- `workout_plans` 每個 user 最多一筆 active plan
+- 設計至少符合 3NF：Goal、Body Part、Exercise 皆獨立成 lookup / entity table
+
+更多資料庫管理教學請見 [DATABASE_MANAGEMENT_GUIDE.md](./DATABASE_MANAGEMENT_GUIDE.md)。
+
+## LLM Architecture
+
+LLM 不直接寫資料庫，也不能憑空創造 Exercise。
+
+```mermaid
+flowchart LR
+    P["User Profile + Preferences"] --> C["Query DB Candidate Exercises"]
+    C --> L["OpenAI LLM<br/>structured JSON"]
+    L --> V["Backend Validation"]
+    V -->|valid| DB["Insert workout_plans / plan_days / plan_exercises"]
+    L -->|API missing/fails| F["Rule-based Fallback"]
+    V -->|invalid JSON/id/range| F
+    F --> DB
+    DB --> R["Workout Plan"]
+```
+
+後端驗證包含：
+
+- `exercise_id` 必須存在於 `exercises`
+- exercise 必須 active
+- 每天 exercise 數量必須符合 duration capacity
+- `target_sets`：1–6
+- `target_reps`：1–30
+- `rest_seconds`：15–300
+- 每天不可重複同一 exercise
+- day number 必須連續且符合每週訓練天數
+
+環境變數：
+
+- `OPENAI_API_KEY`：後端使用；不可放前端、不可 commit
+- `OPENAI_MODEL`：預設 `gpt-4.1-mini`
+- `LLM_FORCE_FAILURE=true`：測試 fallback 用
+
+## Workout Recommendation Flow
+
+1. 使用者建立基本資料
+2. 選擇 Training Goal
+3. 選擇 Training Experience
+4. 選擇每週訓練天數與每次時間
+5. 選擇 Preferred Body Parts
+6. Backend 從 DB 找候選 Exercise
+7. 有 `OPENAI_API_KEY` 時呼叫 LLM 產生 structured JSON
+8. Backend validation
+9. 寫入 `workout_plans`、`plan_days`、`plan_exercises`
+10. 若 LLM 失敗，寫入 `llm_generations` 並使用 fallback plan
+
+## Workout Tracking Flow
+
+```mermaid
+flowchart TD
+    A["Workout Plan"] --> B["Start Workout"]
+    B --> C["Create workout_sessions"]
+    C --> D["/workout/session/:id"]
+    D --> E["Enter Weight / Reps"]
+    E --> F["POST workout_sets immediately"]
+    F --> G["Rest Timer"]
+    G --> H["Next Set / Next Exercise"]
+    H --> I["Complete Session"]
+    I --> J["completed_at + status completed"]
+    J --> K["Workout History + Dashboard"]
+```
+
+## Admin System
+
+Admin routes are separated from the public user flow:
+
+- `/admin/login`
+- `/admin`
+- `/admin/users`
+- `/admin/users/:userId`
+- `/admin/statistics`
+- `/admin/exercises`
+
+Admin dashboard metrics:
+
+- total users
+- new users today
+- total plans
+- total sessions
+- completed sessions today
+- total exercises
+- total training volume
+
+Admin user detail includes:
+
+- profile
+- preferred body parts
+- AI / fallback workout plans
+- workout history
+- workout sets
+- body weight history
+- LLM generation records
+
+## i18n
+
+Frontend i18n files:
+
+- `frontend/src/i18n/zh-TW.json`
+- `frontend/src/i18n/en.json`
+
+預設語言是繁體中文。右上角可切換 English，語言偏好存在 localStorage。
+
+Exercise 顯示邏輯：
+
+- zh-TW：優先使用 `exercise_name_zh`、`description_zh`、`instructions_zh`
+- English：優先使用 `exercise_name_en`、`description_en`、`instructions_en`
+
+## Exercise GIF Source
+
+系統會在 seed 時可選擇同步 ExerciseDB OSS API：
+
+- `EXERCISEDB_API_URL=https://oss.exercisedb.dev/api/v1/exercises`
+- `EXERCISEDB_SYNC_ON_SEED=true`
+
+如果 ExerciseDB 無法連線或找不到對應 GIF，前端會使用本機 SVG fallback：
+
+- `frontend/public/exercise-images/*.svg`
+
+因此 UI 不會因外部圖片 API 失敗而壞掉。
 
 ## Installation
 
@@ -94,25 +230,19 @@ erDiagram
 - Node.js 22+
 - Python 3.14+
 - PostgreSQL 16+
-- [`uv`](https://docs.astral.sh/uv/)（建議）
-
-安裝前端：
+- `uv`
 
 ```bash
 cd frontend
 npm ci
-```
 
-安裝後端：
-
-```bash
-cd backend
+cd ../backend
 uv sync
 ```
 
 ## Environment Variables
 
-先複製範例檔，切勿把真實 `.env` commit 到 GitHub：
+請複製範例檔，不要把真實 `.env` commit 到 GitHub：
 
 ```bash
 cp .env.example .env
@@ -122,52 +252,43 @@ cp frontend/.env.example frontend/.env
 
 | Variable | Used by | Description |
 |---|---|---|
-| `DATABASE_URL` | Backend | PostgreSQL connection string；可接受 `postgresql://` 或 `postgresql+psycopg://` |
-| `SECRET_KEY` | Backend | Admin token signing secret；production 請使用長隨機字串 |
-| `ADMIN_BOOTSTRAP_USERNAME` | Backend | 初始 admin username；預設可用 `admin` |
-| `ADMIN_BOOTSTRAP_PASSWORD` | Backend | 初始 admin password；只放 `.env` 或部署平台環境變數，seed 後以 PBKDF2 hash 儲存 |
-| `CORS_ORIGINS` | Backend | 本機分離開發時允許的前端 origins，以逗號分隔 |
-| `FRONTEND_URL` | Backend | 前端公開網址（文件與部署識別用途） |
-| `EXERCISEDB_API_URL` | Backend | Optional ExerciseDB / AscendAPI free endpoint |
-| `EXERCISEDB_SYNC_ON_SEED` | Backend | `true` 時 seed 階段嘗試同步 ExerciseDB GIF/instructions；失敗時自動使用 fallback |
-| `VITE_API_URL` | Frontend | API base URL；production 同網域使用 `/api` |
-
-所有 `.env`、Password、API key 與 connection string 已由 `.gitignore` 排除。`VITE_` 變數會進入瀏覽器 bundle，絕對不可放敏感資料。
+| `DATABASE_URL` | Backend | PostgreSQL connection string |
+| `SECRET_KEY` | Backend | Admin token signing secret |
+| `ADMIN_BOOTSTRAP_USERNAME` | Backend | Initial admin username |
+| `ADMIN_BOOTSTRAP_PASSWORD` | Backend | Initial admin password；只放 env |
+| `OPENAI_API_KEY` | Backend | Optional LLM planning key；不要放 GitHub |
+| `OPENAI_MODEL` | Backend | LLM model，default `gpt-4.1-mini` |
+| `LLM_FORCE_FAILURE` | Backend | Set `true` to test fallback |
+| `LLM_TIMEOUT_SECONDS` | Backend | OpenAI request timeout |
+| `EXERCISEDB_API_URL` | Backend | Optional GIF/instruction sync |
+| `EXERCISEDB_SYNC_ON_SEED` | Backend | `true` 時 seed 嘗試同步 GIF |
+| `CORS_ORIGINS` | Backend | Local frontend origins |
+| `FRONTEND_URL` | Backend | Public frontend URL |
+| `VITE_API_URL` | Frontend | Public API base URL；不可放 secret |
 
 ## Local Development
-
-1. 建立 PostgreSQL database，並在 `backend/.env` 設定 `DATABASE_URL`。
-2. 執行 migration 與 seed：
 
 ```bash
 cd backend
 uv run alembic upgrade head
 uv run fitness-seed
-```
-
-3. 啟動 API：
-
-```bash
 uv run uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-4. 另一個終端啟動前端：
+另一個終端：
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-5. 開啟 `http://localhost:5173`；API docs 位於 `http://localhost:8000/docs`。
+開啟：
 
-本機後台：
+- Frontend: `http://localhost:5173`
+- API docs: `http://localhost:8000/docs`
+- Admin: `http://localhost:5173/admin/login`
 
-- URL：`http://localhost:5173/admin/login`
-- Username：`ADMIN_BOOTSTRAP_USERNAME`
-- Password：`ADMIN_BOOTSTRAP_PASSWORD`
-- Public user website 仍然不需要登入。
-
-測試與靜態檢查：
+檢查：
 
 ```bash
 cd backend
@@ -180,74 +301,54 @@ npm test
 npm run build
 ```
 
-也可用 production Docker image 啟動單一服務：
+## Production Deployment
 
-```bash
-docker build -t fitness-tracker .
-docker run --env-file .env -p 8000:8000 fitness-tracker
-```
+本專案使用 Render Blueprint。
 
-開啟 `http://localhost:8000`。
+`render.yaml` 會建立：
 
-## Deployment
-
-最簡單部署方式：Render Blueprint。`render.yaml` 會同時建立：
-
-- Docker Web Service：`fitness-tracking-management-system`
-- Cloud PostgreSQL：`fitness-tracking-management-system-db`
-- `DATABASE_URL`：由 Render 用 `fromDatabase.connectionString` 自動注入，不需要手動貼到 GitHub 或程式碼
-- `SECRET_KEY`：由 Render Blueprint 自動產生
-- `ADMIN_BOOTSTRAP_PASSWORD`：使用 Render secret env var 手動輸入，不 commit 到 repository
+- Docker Web Service
+- Render managed PostgreSQL
+- `DATABASE_URL` 自動由 Render database 注入
+- `SECRET_KEY` 自動產生
+- `OPENAI_API_KEY` 與 `ADMIN_BOOTSTRAP_PASSWORD` 使用 `sync: false`，需要你在 Render Dashboard 填入
 
 部署步驟：
 
-1. 將此 repository push 到 GitHub。
-2. 在 Render 選擇 **New → Blueprint**。
-3. 連接 repository：`https://github.com/Loisekoy/-.git`。
-4. Render 會讀取根目錄的 `render.yaml` 與 `Dockerfile`，並自動建立 Web Service + PostgreSQL。
-5. 在 Render Blueprint / Web Service 的 Environment 裡設定 `ADMIN_BOOTSTRAP_PASSWORD`。
-6. 部署啟動時會自動執行 `alembic upgrade head` 與 idempotent seed。
-7. 健康檢查路徑為 `/api/health`；API 文件為 `/docs`。
-8. 部署完成後，任何人都可直接開啟 Render 的公開 HTTPS URL，不需要 GitHub 帳號或網站登入。
+1. Push repository 到 GitHub
+2. Render → New → Blueprint
+3. 連接 `https://github.com/Loisekoy/-.git`
+4. Render 讀取 `render.yaml`
+5. 到 Web Service Environment 填入：
+   - `ADMIN_BOOTSTRAP_PASSWORD`
+   - `OPENAI_API_KEY`（可選；不填會 fallback）
+6. Deploy
 
-注意：Render Free PostgreSQL 目前會在建立 30 天後到期；如果課程需要長期保存 Demo，可改成 Neon Free PostgreSQL 或升級付費 PostgreSQL。若改用 Neon，只要把 `render.yaml` 的 `DATABASE_URL` 改回 `sync: false`，並在 Render Dashboard 手動填入 Neon connection string。
+Docker 啟動時會自動執行：
+
+```bash
+alembic upgrade head && fitness-seed && uvicorn backend.main:app --host 0.0.0.0 --port ${PORT}
+```
 
 ## Live Demo
 
-公開網址：
+Public URL:
 
 [https://fitness-tracking-management-system.onrender.com](https://fitness-tracking-management-system.onrender.com)
 
-老師可直接透過網址進入，不需要 GitHub 帳號、不需要 Login / Register。Database System 展示頁位於：
+Database System page:
 
 [https://fitness-tracking-management-system.onrender.com/database](https://fitness-tracking-management-system.onrender.com/database)
 
-管理後台：
+Admin page:
 
 [https://fitness-tracking-management-system.onrender.com/admin/login](https://fitness-tracking-management-system.onrender.com/admin/login)
 
-## Recommendation Algorithm
-
-`rules-v1` 的輸入為 Training Goal、Training Experience、Preferred Body Parts、Training Days Per Week 與 Training Duration：
-
-1. 根據 2–6 天選擇基礎 split。
-2. 30 / 60 / 90 分鐘分別配置最多 4 / 6 / 8 個動作。
-3. 每個偏好部位盡量在不同訓練日至少出現兩次。
-4. 仍保留胸、背、肩、腿、臀、核心與手臂的平衡覆蓋。
-5. 依經驗、動作難度、複合動作優先、前一日重複與本週使用次數評分。
-6. 依 Goal 產生 sets、reps、rest；新課表啟用時舊課表自動 archived。
-
-詳細 pseudo-code 與決策表位於 [DATABASE_DESIGN.md](./DATABASE_DESIGN.md#11-workout-recommendation-algorithm-rules-v1)。
-
 ## Security and Privacy Scope
 
-依需求，public user website 沒有使用者 authentication 或 authorization。`user_id` 是匿名識別碼，不是存取權限；知道某個 UUID 的人可能透過 API 操作該筆資料。因此請只用暱稱與測試資料，不要輸入真實敏感健康資訊。
-
-管理後台則是獨立保護區：
-
-- `/api/admin/*` 需要 admin bearer token。
-- Admin password 以 PBKDF2-SHA256 hash 儲存在 `admins.password_hash`。
-- `POST/PATCH/DELETE /api/exercises` 僅允許 admin token 呼叫。
-- Public API 不提供 unrestricted `GET /api/users` 清單。
-
-若未來要正式公開收集個資，必須另行加入使用者登入、授權、隱私政策與資料刪除流程。
+- Public user flow intentionally has no authentication.
+- `user_id` is an anonymous identifier, not a secure login credential.
+- Do not enter sensitive personal health data in the demo.
+- Admin password is hashed in `admins.password_hash`.
+- Secrets are loaded only from environment variables.
+- `OPENAI_API_KEY`, `DATABASE_URL`, passwords, and API keys must never be committed.

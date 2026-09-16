@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;800&display=swap');
 
 :root {
   --ink: #07182d;
@@ -18,7 +18,7 @@
   --success: #0d7046;
   --success-soft: #e9f8f0;
   --shadow: 0 18px 50px rgb(7 24 45 / 10%);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Noto Sans TC", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
   background: var(--surface);
   font-synthesis: none;
@@ -82,7 +82,7 @@ h3,
 .brand,
 .metric-strip strong,
 .workout-timer strong {
-  font-family: "Barlow Condensed", "Arial Narrow", Impact, sans-serif;
+  font-family: "Noto Sans TC", Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
 #root,
@@ -180,6 +180,35 @@ h3,
   color: var(--blue);
   font-size: 0.86rem;
   font-weight: 700;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 16px;
+}
+
+.language-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.language-switch select {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 28px 4px 10px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 800;
 }
 
 .button {
@@ -351,7 +380,7 @@ h3,
 
 .system-line__number {
   color: var(--lime);
-  font-family: "Barlow Condensed", sans-serif;
+  font-family: "Noto Sans TC", Inter, sans-serif;
   font-size: 1.15rem;
   font-weight: 700;
 }
@@ -363,7 +392,7 @@ h3,
 }
 
 .system-line strong {
-  font-family: "Barlow Condensed", sans-serif;
+  font-family: "Noto Sans TC", Inter, sans-serif;
   font-size: 1.55rem;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -574,6 +603,10 @@ select:focus {
 
 .choice-grid--three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.choice-grid--four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .choice-button {
@@ -901,7 +934,7 @@ select:focus {
 .today-brief strong {
   display: block;
   margin-top: 7px;
-  font-family: "Barlow Condensed", sans-serif;
+  font-family: "Noto Sans TC", Inter, sans-serif;
   font-size: 2rem;
   line-height: 1;
   text-transform: uppercase;
@@ -1285,6 +1318,48 @@ select:focus {
   background: var(--ink);
 }
 
+.workout-action-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.25fr) 1fr;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.workout-action-row .workout-primary {
+  margin-top: 0;
+}
+
+.rest-timer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 24px;
+  border: 1px solid #f2c875;
+  padding: 14px 16px;
+  background: #fff8e8;
+}
+
+.rest-timer > div {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rest-timer span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rest-timer strong {
+  font-size: 1.8rem;
+}
+
 .workout-primary:hover {
   background: #142940;
 }
@@ -1299,8 +1374,61 @@ select:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-family: "Barlow Condensed", sans-serif;
+  font-family: "Noto Sans TC", Inter, sans-serif;
   font-size: 1.6rem;
+  text-transform: uppercase;
+}
+
+.active-workout--summary {
+  display: grid;
+  min-height: 80vh;
+  place-items: center;
+}
+
+.completion-card {
+  width: min(100%, 760px);
+  border: 1px solid var(--line);
+  padding: clamp(28px, 6vw, 54px);
+  background: #fff;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.completion-card__icon {
+  display: inline-grid;
+  width: 74px;
+  height: 74px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.completion-card h1 {
+  margin: 22px 0 8px;
+  font-size: clamp(2.4rem, 6vw, 4.6rem);
+}
+
+.completion-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 28px 0;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.completion-metrics div {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+  background: #fff;
+}
+
+.completion-metrics span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
   text-transform: uppercase;
 }
 
@@ -1439,7 +1567,7 @@ select:focus {
 .ranked-list > div > span,
 .ranked-list > button > span {
   color: var(--blue);
-  font-family: "Barlow Condensed", sans-serif;
+  font-family: "Noto Sans TC", Inter, sans-serif;
   font-size: 1rem;
   font-weight: 700;
 }
@@ -1581,7 +1709,7 @@ select:focus {
   display: block;
   overflow: hidden;
   margin-top: 8px;
-  font-family: "Barlow Condensed", sans-serif;
+  font-family: "Noto Sans TC", Inter, sans-serif;
   font-size: 1.65rem;
   line-height: 1;
   text-overflow: ellipsis;
@@ -1710,7 +1838,7 @@ select:focus {
 }
 
 .popular-metric strong {
-  font-family: "Barlow Condensed", sans-serif;
+  font-family: "Noto Sans TC", Inter, sans-serif;
   font-size: 1.6rem;
   text-transform: uppercase;
 }
@@ -2004,7 +2132,7 @@ select:focus {
 
 .admin-metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1px;
   margin-bottom: 38px;
   background: var(--line);
@@ -2031,7 +2159,7 @@ select:focus {
 .admin-metric-card strong {
   display: block;
   margin-top: 12px;
-  font-family: "Barlow Condensed", sans-serif;
+  font-family: "Noto Sans TC", Inter, sans-serif;
   font-size: clamp(2.6rem, 5vw, 4.7rem);
   line-height: 0.9;
 }
@@ -2371,7 +2499,7 @@ select:focus {
 .database-hero strong {
   display: block;
   margin-top: 9px;
-  font-family: "Barlow Condensed", sans-serif;
+  font-family: "Noto Sans TC", Inter, sans-serif;
   font-size: clamp(2rem, 4vw, 3.6rem);
   line-height: 1;
   text-transform: uppercase;
@@ -2884,7 +3012,8 @@ select:focus {
     font-size: 3.4rem;
   }
 
-  .choice-grid--three {
+  .choice-grid--three,
+  .choice-grid--four {
     grid-template-columns: 1fr;
   }
 
@@ -2994,6 +3123,15 @@ select:focus {
     grid-template-columns: 95px 1fr 38px;
   }
 
+  .workout-action-row,
+  .completion-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .language-switch span {
+    display: none;
+  }
+
   .history-columns,
   .dashboard-charts {
     grid-template-columns: 1fr;
@@ -3082,6 +3220,12 @@ select:focus {
 
   .form-grid,
   .choice-grid--two {
+    grid-template-columns: 1fr;
+  }
+
+  .choice-grid--four,
+  .workout-action-row,
+  .completion-metrics {
     grid-template-columns: 1fr;
   }
 

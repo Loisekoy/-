@@ -40,6 +40,7 @@ TABLE_ORDER = [
     "session_plan_days",
     "workout_sets",
     "body_records",
+    "llm_generations",
 ]
 
 RELATIONSHIP_LABELS = {
@@ -63,6 +64,7 @@ RELATIONSHIP_LABELS = {
     ("workout_sets", "session_id"): "Workout_Session 1:N Workout_Set",
     ("workout_sets", "exercise_id"): "Exercise 1:N Workout_Set",
     ("body_records", "user_id"): "User 1:N Body_Record",
+    ("llm_generations", "user_id"): "User 1:N LLM_Generation",
 }
 
 NORMALIZATION_NOTES = [

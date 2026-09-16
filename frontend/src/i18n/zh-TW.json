@@ -1,0 +1,86 @@
+{
+  "app": {
+    "loading": "載入中",
+    "publicSite": "公開網站",
+    "language": "語言"
+  },
+  "nav": {
+    "plan": "我的課表",
+    "startWorkout": "開始訓練",
+    "history": "歷史紀錄",
+    "dashboard": "Dashboard",
+    "database": "資料庫系統",
+    "profile": "編輯資料",
+    "admin": "後台",
+    "users": "使用者",
+    "statistics": "統計",
+    "exercises": "動作資料庫",
+    "logout": "登出",
+    "startNow": "從現在開始"
+  },
+  "home": {
+    "title": "健身訓練，從適合你的計畫開始。",
+    "subtitle": "輸入基本資料、目標與想加強的部位，系統會從資料庫挑選候選動作，再由 LLM 或 fallback 規則產生可執行課表。",
+    "primaryNew": "開始建立我的健身計畫",
+    "primaryExisting": "繼續我的計畫",
+    "secondaryNew": "查看資料庫系統",
+    "secondaryExisting": "建立新資料",
+    "privacy": "不需要登入或密碼。系統只在瀏覽器保存 anonymous user_id；請勿輸入敏感個資。",
+    "stepsTitle": "使用流程",
+    "steps": [
+      "建立使用者資料",
+      "選擇健身目標",
+      "選擇想加強部位",
+      "AI 產生訓練課表",
+      "開始運動並記錄每一組"
+    ]
+  },
+  "onboarding": {
+    "steps": ["基本資料", "健身目標", "訓練經驗", "每週天數", "訓練時間", "想加強部位"],
+    "buttonNext": "下一步",
+    "buttonBack": "上一步",
+    "buttonGenerate": "AI 幫我產生課表",
+    "generating": "正在產生課表…",
+    "name": "名字",
+    "gender": "性別（選填）",
+    "age": "年齡",
+    "height": "身高",
+    "weight": "體重",
+    "goalHelp": "選擇目前最主要的訓練方向。",
+    "experienceHelp": "訓練經驗會影響動作難度、組數與恢復安排。",
+    "bodyHelp": "可複選；重點部位會提高訓練頻率，但不會完全忽略其他主要肌群。",
+    "scheduleHelp": "選擇你每週真正能做到的訓練天數。",
+    "durationHelp": "時間越長，每天可安排的動作數量越多。",
+    "reviewHelp": "送出後會先建立使用者與體重紀錄，再產生訓練課表。"
+  },
+  "plan": {
+    "title": "我的訓練課表",
+    "subtitle": "查看今天主要要做什麼、每個動作的參考圖片、目標組數與休息時間。",
+    "mainTask": "今日主要任務",
+    "targetVolume": "預計訓練量",
+    "startDay": "開始訓練",
+    "regenerate": "重新產生課表",
+    "loading": "正在載入訓練課表",
+    "aiBadge": "AI / DB 驗證課表",
+    "fallbackBadge": "Rule-based fallback"
+  },
+  "workout": {
+    "loading": "正在準備訓練",
+    "missing": "找不到進行中的訓練",
+    "close": "關閉訓練",
+    "duration": "訓練時間",
+    "current": "當前動作",
+    "set": "Set",
+    "weight": "Weight (kg)",
+    "reps": "Reps",
+    "status": "狀態",
+    "saveSet": "完成並儲存本組",
+    "nextExercise": "下一個動作",
+    "finish": "完成今天訓練",
+    "rest": "休息倒數",
+    "skipRest": "跳過休息",
+    "summary": "訓練完成",
+    "history": "查看歷史紀錄",
+    "home": "回首頁"
+  }
+}

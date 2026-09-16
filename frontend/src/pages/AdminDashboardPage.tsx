@@ -1,4 +1,4 @@
-import { Activity, CalendarPlus, Dumbbell, UsersRound } from 'lucide-react'
+import { Activity, CalendarCheck, CalendarPlus, Dumbbell, UsersRound } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -82,6 +82,7 @@ export default function AdminDashboardPage() {
         <MetricCard label="Total Users" value={dashboard.total_users} icon={UsersRound} />
         <MetricCard label="New Users Today" value={dashboard.new_users_today} icon={CalendarPlus} />
         <MetricCard label="Total Workouts" value={dashboard.total_workouts} icon={Dumbbell} />
+        <MetricCard label="Completed Today" value={dashboard.completed_workouts_today} icon={CalendarCheck} />
         <MetricCard
           label="Training Volume"
           value={dashboard.total_training_volume.toLocaleString()}
@@ -100,6 +101,10 @@ export default function AdminDashboardPage() {
             <div>
               <dt>Total Workout Plans</dt>
               <dd>{dashboard.total_workout_plans}</dd>
+            </div>
+            <div>
+              <dt>Total Exercises</dt>
+              <dd>{dashboard.total_exercises}</dd>
             </div>
             <div>
               <dt>Average Age</dt>

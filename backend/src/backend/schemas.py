@@ -42,7 +42,7 @@ class OnboardingCreate(BaseModel):
     training_experience: Experience
     training_goal_id: int
     training_days_per_week: Literal[2, 3, 4, 5, 6]
-    training_duration_minutes: Literal[30, 60, 90]
+    training_duration_minutes: Literal[30, 45, 60, 90]
     preferred_body_part_ids: list[int] = Field(min_length=1)
 
     @field_validator("name")
@@ -69,7 +69,7 @@ class UserUpdate(BaseModel):
     training_experience: Experience | None = None
     training_goal_id: int | None = None
     training_days_per_week: Literal[2, 3, 4, 5, 6] | None = None
-    training_duration_minutes: Literal[30, 60, 90] | None = None
+    training_duration_minutes: Literal[30, 45, 60, 90] | None = None
     preferred_body_part_ids: list[int] | None = Field(default=None, min_length=1)
 
 
@@ -91,17 +91,25 @@ class UserProfileRead(ORMModel):
 
 class ExerciseBase(BaseModel):
     exercise_name: str = Field(min_length=1, max_length=120)
+    exercise_name_en: str | None = Field(default=None, max_length=120)
+    exercise_name_zh: str | None = Field(default=None, max_length=120)
     body_part_id: int
     difficulty_level: Difficulty
     equipment: str = Field(min_length=1, max_length=80)
     movement_type: MovementType
     description: str = Field(min_length=1)
+    description_en: str | None = None
+    description_zh: str | None = None
     image_url: str | None = Field(default=None, max_length=255)
     external_exercise_id: str | None = Field(default=None, max_length=80)
     gif_url: str | None = Field(default=None, max_length=500)
     target_muscles: list[str] = Field(default_factory=list)
     secondary_muscles: list[str] = Field(default_factory=list)
     instructions: list[str] = Field(default_factory=list)
+    instructions_en: list[str] = Field(default_factory=list)
+    instructions_zh: list[str] = Field(default_factory=list)
+    coaching_notes_en: str | None = None
+    coaching_notes_zh: str | None = None
 
 
 class ExerciseCreate(ExerciseBase):
@@ -110,34 +118,50 @@ class ExerciseCreate(ExerciseBase):
 
 class ExerciseUpdate(BaseModel):
     exercise_name: str | None = Field(default=None, min_length=1, max_length=120)
+    exercise_name_en: str | None = Field(default=None, max_length=120)
+    exercise_name_zh: str | None = Field(default=None, max_length=120)
     body_part_id: int | None = None
     difficulty_level: Difficulty | None = None
     equipment: str | None = Field(default=None, min_length=1, max_length=80)
     movement_type: MovementType | None = None
     description: str | None = Field(default=None, min_length=1)
+    description_en: str | None = None
+    description_zh: str | None = None
     image_url: str | None = Field(default=None, max_length=255)
     external_exercise_id: str | None = Field(default=None, max_length=80)
     gif_url: str | None = Field(default=None, max_length=500)
     target_muscles: list[str] | None = None
     secondary_muscles: list[str] | None = None
     instructions: list[str] | None = None
+    instructions_en: list[str] | None = None
+    instructions_zh: list[str] | None = None
+    coaching_notes_en: str | None = None
+    coaching_notes_zh: str | None = None
     is_active: bool | None = None
 
 
 class ExerciseRead(ORMModel):
     exercise_id: int
     exercise_name: str
+    exercise_name_en: str | None
+    exercise_name_zh: str | None
     body_part: BodyPartRead
     difficulty_level: str
     equipment: str
     movement_type: str
     description: str
+    description_en: str | None
+    description_zh: str | None
     image_url: str | None
     external_exercise_id: str | None
     gif_url: str | None
     target_muscles: list[str]
     secondary_muscles: list[str]
     instructions: list[str]
+    instructions_en: list[str]
+    instructions_zh: list[str]
+    coaching_notes_en: str | None
+    coaching_notes_zh: str | None
     is_active: bool
 
 
@@ -212,12 +236,27 @@ class WorkoutSetRead(ORMModel):
 
 class WorkoutSessionRead(ORMModel):
     session_id: int
+    plan_day_id: int | None
     session_name: str
     status: str
     started_at: datetime
     ended_at: datetime | None
+    completed_at: datetime | None
     notes: str | None
     sets: list[WorkoutSetRead]
+
+
+class LLMGenerationRead(ORMModel):
+    llm_generation_id: int
+    user_id: uuid.UUID
+    provider: str
+    model: str
+    status: str
+    used_fallback: bool
+    prompt_summary: str | None
+    response_summary: str | None
+    error_message: str | None
+    created_at: datetime
 
 
 class BodyRecordCreate(BaseModel):
@@ -343,6 +382,8 @@ class AdminDashboardRead(BaseModel):
     new_users_today: int
     total_workouts: int
     total_workout_plans: int
+    completed_workouts_today: int
+    total_exercises: int
     average_age: float | None
     average_training_days: float | None
     total_training_volume: float
@@ -385,6 +426,7 @@ class AdminWorkoutSessionSummaryRead(BaseModel):
     status: str
     started_at: datetime
     ended_at: datetime | None
+    completed_at: datetime | None
     set_count: int
     volume_kg: float
 
@@ -393,7 +435,9 @@ class AdminUserDetailRead(BaseModel):
     profile: UserProfileRead
     workout_plans: list[AdminPlanSummaryRead]
     workout_history: list[AdminWorkoutSessionSummaryRead]
+    workout_sets: list[WorkoutSetRead]
     weight_history: list[BodyRecordRead]
+    llm_generations: list[LLMGenerationRead]
 
 
 class AdminStatisticsRead(BaseModel):

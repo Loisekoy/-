@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { clearUserId, getUserId, saveUserId } from './storage'
+import { clearUserId, getLanguage, getUserId, saveLanguage, saveUserId } from './storage'
 
 describe('anonymous profile pointer', () => {
   beforeEach(() => localStorage.clear())
@@ -26,5 +26,11 @@ describe('anonymous profile pointer', () => {
     clearUserId()
 
     expect(getUserId()).toBeNull()
+  })
+
+  it('stores the language preference separately from profile data', () => {
+    expect(getLanguage()).toBe('zh-TW')
+    saveLanguage('en')
+    expect(getLanguage()).toBe('en')
   })
 })

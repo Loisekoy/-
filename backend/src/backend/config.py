@@ -18,6 +18,10 @@ class Settings(BaseSettings):
         default="https://oss.exercisedb.dev/api/v1/exercises", alias="EXERCISEDB_API_URL"
     )
     exercisedb_sync_on_seed: bool = Field(default=False, alias="EXERCISEDB_SYNC_ON_SEED")
+    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    openai_model: str = Field(default="gpt-4.1-mini", alias="OPENAI_MODEL")
+    llm_force_failure: bool = Field(default=False, alias="LLM_FORCE_FAILURE")
+    llm_timeout_seconds: int = Field(default=25, alias="LLM_TIMEOUT_SECONDS")
 
     model_config = SettingsConfigDict(
         env_file=".env",

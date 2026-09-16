@@ -84,7 +84,7 @@ class User(Base, TimestampMixin):
             name="ck_user_experience",
         ),
         CheckConstraint("training_days_per_week IN (2,3,4,5,6)", name="ck_user_days"),
-        CheckConstraint("training_duration_minutes IN (30,60,90)", name="ck_user_duration"),
+        CheckConstraint("training_duration_minutes IN (30,45,60,90)", name="ck_user_duration"),
         Index("ix_users_training_goal_id", "training_goal_id"),
     )
 
@@ -159,6 +159,8 @@ class Exercise(Base, TimestampMixin):
 
     exercise_id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
     exercise_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    exercise_name_en: Mapped[str | None] = mapped_column(String(120))
+    exercise_name_zh: Mapped[str | None] = mapped_column(String(120))
     body_part_id: Mapped[int] = mapped_column(
         ForeignKey("body_parts.body_part_id", ondelete="RESTRICT"), nullable=False
     )
@@ -166,6 +168,8 @@ class Exercise(Base, TimestampMixin):
     equipment: Mapped[str] = mapped_column(String(80), nullable=False)
     movement_type: Mapped[str] = mapped_column(String(20), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    description_en: Mapped[str | None] = mapped_column(Text)
+    description_zh: Mapped[str | None] = mapped_column(Text)
     image_url: Mapped[str | None] = mapped_column(String(255))
     external_exercise_id: Mapped[str | None] = mapped_column(String(80), unique=True)
     gif_url: Mapped[str | None] = mapped_column(String(500))
@@ -178,6 +182,14 @@ class Exercise(Base, TimestampMixin):
     instructions: Mapped[list[str]] = mapped_column(
         JSON, default=list, server_default=text("'[]'"), nullable=False
     )
+    instructions_en: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default=text("'[]'"), nullable=False
+    )
+    instructions_zh: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default=text("'[]'"), nullable=False
+    )
+    coaching_notes_en: Mapped[str | None] = mapped_column(Text)
+    coaching_notes_zh: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -190,7 +202,7 @@ class WorkoutPlan(Base):
     __tablename__ = "workout_plans"
     __table_args__ = (
         CheckConstraint("training_days_per_week IN (2,3,4,5,6)", name="ck_plan_days"),
-        CheckConstraint("training_duration_minutes IN (30,60,90)", name="ck_plan_duration"),
+        CheckConstraint("training_duration_minutes IN (30,45,60,90)", name="ck_plan_duration"),
         CheckConstraint("status IN ('generated','active','archived')", name="ck_plan_status"),
         Index("ix_workout_plans_user_generated", "user_id", text("generated_at DESC")),
         Index(
@@ -285,13 +297,18 @@ class WorkoutSession(Base):
     __tablename__ = "workout_sessions"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('in_progress','completed','cancelled')", name="ck_session_status"
+            "status IN ('in_progress','completed','abandoned','cancelled')",
+            name="ck_session_status",
         ),
         CheckConstraint(
             "ended_at IS NULL OR ended_at >= started_at", name="ck_session_end_after_start"
         ),
         CheckConstraint(
             "status <> 'completed' OR ended_at IS NOT NULL", name="ck_completed_session_end"
+        ),
+        CheckConstraint(
+            "completed_at IS NULL OR completed_at >= started_at",
+            name="ck_session_complete_after_start",
         ),
         Index("ix_sessions_user_started", "user_id", text("started_at DESC")),
         Index("ix_sessions_user_status", "user_id", "status"),
@@ -307,6 +324,7 @@ class WorkoutSession(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notes: Mapped[str | None] = mapped_column(Text)
 
     source: Mapped[SessionPlanDay | None] = relationship(
@@ -315,6 +333,10 @@ class WorkoutSession(Base):
     sets: Mapped[list[WorkoutSet]] = relationship(
         back_populates="session", cascade="all, delete-orphan", passive_deletes=True
     )
+
+    @property
+    def plan_day_id(self) -> int | None:
+        return self.source.plan_day_id if self.source is not None else None
 
 
 class SessionPlanDay(Base):
@@ -381,3 +403,35 @@ class BodyRecord(Base, TimestampMixin):
     notes: Mapped[str | None] = mapped_column(Text)
 
     user: Mapped[User] = relationship(back_populates="body_records")
+
+
+class LLMGeneration(Base):
+    __tablename__ = "llm_generations"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('success','failed','fallback')", name="ck_llm_generation_status"
+        ),
+        Index("ix_llm_generations_user_created", "user_id", text("created_at DESC")),
+        Index("ix_llm_generations_status", "status"),
+    )
+
+    llm_generation_id: Mapped[int] = mapped_column(
+        BIGINT_PK, primary_key=True, autoincrement=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    model: Mapped[str] = mapped_column(String(80), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    used_fallback: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
+    )
+    prompt_summary: Mapped[str | None] = mapped_column(Text)
+    response_summary: Mapped[str | None] = mapped_column(Text)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped[User] = relationship()

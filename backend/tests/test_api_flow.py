@@ -51,7 +51,7 @@ def test_complete_onboarding_plan_workout_and_dashboard_flow(client: TestClient)
     plan_response = client.post(f"/api/users/{user_id}/plans/generate")
     assert plan_response.status_code == 201, plan_response.text
     plan = plan_response.json()
-    assert plan["algorithm_version"] == "rules-v1"
+    assert plan["algorithm_version"] == "rules-v1-fallback"
     assert len(plan["days"]) == 4
     chest_days = sum(
         any(item["exercise"]["body_part"]["body_part_code"] == "chest" for item in day["exercises"])
@@ -66,6 +66,7 @@ def test_complete_onboarding_plan_workout_and_dashboard_flow(client: TestClient)
     )
     assert session_response.status_code == 201, session_response.text
     workout = session_response.json()
+    assert workout["plan_day_id"] == first_day["plan_day_id"]
     exercise_id = first_day["exercises"][0]["exercise"]["exercise_id"]
 
     for set_number, (weight, reps) in enumerate([(60, 12), (65, 10), (65, 8)], start=1):
@@ -85,6 +86,7 @@ def test_complete_onboarding_plan_workout_and_dashboard_flow(client: TestClient)
     )
     assert completed.status_code == 200, completed.text
     assert completed.json()["status"] == "completed"
+    assert completed.json()["completed_at"] is not None
 
     dashboard_response = client.get(f"/api/users/{user_id}/dashboard?days=28")
     assert dashboard_response.status_code == 200, dashboard_response.text
@@ -101,12 +103,16 @@ def test_complete_onboarding_plan_workout_and_dashboard_flow(client: TestClient)
     admin_dashboard = client.get("/api/admin/dashboard", headers=headers)
     assert admin_dashboard.status_code == 200, admin_dashboard.text
     assert admin_dashboard.json()["total_users"] == 1
+    assert admin_dashboard.json()["completed_workouts_today"] == 1
+    assert admin_dashboard.json()["total_exercises"] >= 30
     admin_users = client.get("/api/admin/users?search=Demo", headers=headers)
     assert admin_users.status_code == 200, admin_users.text
     assert admin_users.json()["total"] == 1
     admin_detail = client.get(f"/api/admin/users/{user_id}", headers=headers)
     assert admin_detail.status_code == 200, admin_detail.text
     assert admin_detail.json()["profile"]["name"] == "Demo Student"
+    assert len(admin_detail.json()["workout_sets"]) == 3
+    assert admin_detail.json()["llm_generations"][0]["status"] == "fallback"
     admin_stats = client.get("/api/admin/statistics", headers=headers)
     assert admin_stats.status_code == 200, admin_stats.text
     assert admin_stats.json()["total_users"] == 1
@@ -118,6 +124,7 @@ def test_complete_onboarding_plan_workout_and_dashboard_flow(client: TestClient)
         "users",
         "exercises",
         "workout_sets",
+        "llm_generations",
     }
     assert any(
         relationship["from_table"] == "workout_sets"

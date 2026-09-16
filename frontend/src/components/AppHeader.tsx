@@ -1,26 +1,28 @@
 import { BarChart3, CalendarDays, Database, Dumbbell, History, LayoutDashboard, Play, UserRound, UsersRound } from 'lucide-react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useI18n } from '../i18n'
 import { clearAdminToken, getAdminToken, getUserId } from '../lib/storage'
 import { Brand } from './Brand'
 
 const navigation = [
-  { to: '/plan', label: '我的課表', icon: CalendarDays },
-  { to: '/plan', label: '開始訓練', icon: Play },
-  { to: '/history', label: '歷史紀錄', icon: History },
-  { to: '/dashboard', label: 'Dashboard', icon: BarChart3 },
-  { to: '/database', label: 'DB Schema', icon: Database },
-  { to: '/profile', label: '編輯資料', icon: UserRound },
+  { to: '/plan', labelKey: 'nav.plan', icon: CalendarDays },
+  { to: '/plan', labelKey: 'nav.startWorkout', icon: Play },
+  { to: '/history', labelKey: 'nav.history', icon: History },
+  { to: '/dashboard', labelKey: 'nav.dashboard', icon: BarChart3 },
+  { to: '/database', labelKey: 'nav.database', icon: Database },
+  { to: '/profile', labelKey: 'nav.profile', icon: UserRound },
 ]
 
 const adminNavigation = [
-  { to: '/admin', label: 'Admin', icon: LayoutDashboard },
-  { to: '/admin/users', label: 'Users', icon: UsersRound },
-  { to: '/admin/statistics', label: 'Statistics', icon: BarChart3 },
-  { to: '/admin/exercises', label: 'Exercises', icon: Dumbbell },
-  { to: '/', label: 'Public Site', icon: Database },
+  { to: '/admin', labelKey: 'nav.admin', icon: LayoutDashboard },
+  { to: '/admin/users', labelKey: 'nav.users', icon: UsersRound },
+  { to: '/admin/statistics', labelKey: 'nav.statistics', icon: BarChart3 },
+  { to: '/admin/exercises', labelKey: 'nav.exercises', icon: Dumbbell },
+  { to: '/', labelKey: 'app.publicSite', icon: Database },
 ]
 
 export function AppHeader() {
+  const { language, setLanguage, t } = useI18n()
   const location = useLocation()
   const navigate = useNavigate()
   const hasProfile = Boolean(getUserId())
@@ -36,6 +38,20 @@ export function AppHeader() {
     navigate('/admin/login')
   }
 
+  const languageSwitch = (
+    <label className="language-switch">
+      <span>{t('app.language')}</span>
+      <select
+        aria-label={t('app.language')}
+        value={language}
+        onChange={(event) => setLanguage(event.target.value === 'en' ? 'en' : 'zh-TW')}
+      >
+        <option value="zh-TW">繁中</option>
+        <option value="en">English</option>
+      </select>
+    </label>
+  )
+
   return (
     <header className="app-header">
       <Link className="app-header__brand" to={isAdminRoute ? '/admin' : '/'}>
@@ -43,45 +59,50 @@ export function AppHeader() {
       </Link>
       {isAdminRoute ? (
         <nav className="app-nav app-nav--admin" aria-label="管理後台導覽">
-          {hasAdminToken && !isAdminLogin ? adminNavigation.map(({ to, label, icon: Icon }) => (
+          {hasAdminToken && !isAdminLogin ? adminNavigation.map(({ to, labelKey, icon: Icon }) => (
             <NavLink
-              key={label}
+              key={labelKey}
               to={to}
               end={to === '/admin'}
               className={({ isActive }) => `app-nav__link ${isActive ? 'is-active' : ''}`}
             >
               <Icon size={18} strokeWidth={1.9} aria-hidden="true" />
-              <span>{label}</span>
+              <span>{t(labelKey)}</span>
             </NavLink>
           )) : (
             <NavLink to="/" className="app-nav__link">
               <Database size={18} strokeWidth={1.9} aria-hidden="true" />
-              <span>Public Site</span>
+              <span>{t('app.publicSite')}</span>
             </NavLink>
           )}
           {hasAdminToken && !isAdminLogin ? (
-            <button className="app-nav__button" type="button" onClick={logoutAdmin}>Logout</button>
+            <button className="app-nav__button" type="button" onClick={logoutAdmin}>{t('nav.logout')}</button>
           ) : null}
+          {languageSwitch}
         </nav>
       ) : hasProfile ? (
         <nav className="app-nav" aria-label="主要導覽">
-          {navigation.map(({ to, label, icon: Icon }) => (
+          {navigation.map(({ to, labelKey, icon: Icon }) => (
             <NavLink
-              key={label}
+              key={labelKey}
               to={to}
               className={({ isActive }) =>
-                `app-nav__link ${isActive && label !== '開始訓練' ? 'is-active' : ''}`
+                `app-nav__link ${isActive && labelKey !== 'nav.startWorkout' ? 'is-active' : ''}`
               }
             >
               <Icon size={18} strokeWidth={1.9} aria-hidden="true" />
-              <span>{label}</span>
+              <span>{t(labelKey)}</span>
             </NavLink>
           ))}
+          {languageSwitch}
         </nav>
       ) : (
-        <Link className="header-cta" to="/onboarding">
-          從現在開始
-        </Link>
+        <div className="header-actions">
+          {languageSwitch}
+          <Link className="header-cta" to="/onboarding">
+            {t('nav.startNow')}
+          </Link>
+        </div>
       )}
     </header>
   )
