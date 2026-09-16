@@ -21,6 +21,11 @@ def get_dashboard(
     days: Annotated[int, Query(ge=7, le=365)] = 28,
 ) -> DashboardRead:
     start_date = date.today() - timedelta(days=days - 1)
+    week_start = date.today() - timedelta(days=date.today().weekday())
+    all_time_filters = (
+        WorkoutSession.user_id == user_id,
+        WorkoutSession.status == "completed",
+    )
     base_filters = (
         WorkoutSession.user_id == user_id,
         WorkoutSession.status == "completed",
@@ -30,6 +35,18 @@ def get_dashboard(
     completed_workouts = (
         db.scalar(select(func.count(WorkoutSession.session_id)).where(*base_filters)) or 0
     )
+    total_completed_workouts = (
+        db.scalar(select(func.count(WorkoutSession.session_id)).where(*all_time_filters)) or 0
+    )
+    this_week_workouts = (
+        db.scalar(
+            select(func.count(WorkoutSession.session_id)).where(
+                *all_time_filters,
+                func.date(WorkoutSession.started_at) >= week_start,
+            )
+        )
+        or 0
+    )
     working_sets, training_volume = db.execute(
         select(
             func.count(WorkoutSet.workout_set_id),
@@ -38,6 +55,11 @@ def get_dashboard(
         .join(WorkoutSession, WorkoutSession.session_id == WorkoutSet.session_id)
         .where(*base_filters, WorkoutSet.is_warmup.is_(False))
     ).one()
+    total_training_volume = db.scalar(
+        select(func.coalesce(func.sum(WorkoutSet.weight_kg * WorkoutSet.reps), 0))
+        .join(WorkoutSession, WorkoutSession.session_id == WorkoutSet.session_id)
+        .where(*all_time_filters, WorkoutSet.is_warmup.is_(False))
+    )
 
     weights = db.execute(
         select(BodyRecord.recorded_on, BodyRecord.weight_kg)
@@ -108,6 +130,9 @@ def get_dashboard(
     ).all()
 
     return DashboardRead(
+        this_week_workouts=this_week_workouts,
+        total_completed_workouts=total_completed_workouts,
+        total_training_volume_kg=float(total_training_volume or 0),
         completed_workouts=completed_workouts,
         working_sets=working_sets or 0,
         training_volume_kg=float(training_volume or 0),

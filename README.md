@@ -10,11 +10,12 @@
 
 - 五步驟匿名建檔流程
 - Rule-Based Workout Recommendation（不使用 AI API）
-- Workout Plan 檢視與目標組數／次數修改
+- 詳細 Workout Plan：今日主要任務、每個動作參考圖片、動作重點、重量建議、目標組數／次數修改
 - Workout Session 與每組 Weight / Reps 紀錄
 - Workout、Exercise、Body Weight History
 - Dashboard：Training Volume、工作組數、訓練次數、最常訓練部位與最常使用動作
-- Exercises 搜尋、篩選與完整 CRUD API
+- Exercises 搜尋、篩選、參考圖片與完整 CRUD API
+- Database System 展示頁：Schema、PK/FK、Relationships、row counts、JOIN / GROUP BY / Aggregate 查詢結果
 - 使用者、體重、課表、訓練紀錄的 CRUD API
 - 桌機與手機響應式介面
 
@@ -43,7 +44,7 @@ flowchart LR
 | `users` | 匿名基本資料與訓練偏好 | PK `user_id`; FK `training_goal_id` |
 | `body_parts` | 標準化身體部位 | PK `body_part_id` |
 | `user_body_parts` | User 與 Body Part 的 M:N junction table | Composite PK/FK |
-| `exercises` | 動作資料庫 | PK `exercise_id`; FK `body_part_id` |
+| `exercises` | 動作資料庫與參考圖片 URL | PK `exercise_id`; FK `body_part_id` |
 | `workout_plans` | 產生的週課表 | PK `plan_id`; FK `user_id`, `training_goal_id` |
 | `plan_days` | 課表中的訓練日 | PK `plan_day_id`; FK `plan_id` |
 | `plan_exercises` | 每日動作與目標處方 | PK `plan_exercise_id`; FK `plan_day_id`, `exercise_id` |
@@ -53,6 +54,8 @@ flowchart LR
 | `body_records` | 體重歷史 | PK `body_record_id`; FK `user_id` |
 
 完整欄位、data types、PK/FK、constraints、indexes、關係、正規化與推薦規則請見 [DATABASE_DESIGN.md](./DATABASE_DESIGN.md)。可執行的 JOIN / GROUP BY / aggregate 範例請見 [SQL_QUERIES.md](./docs/SQL_QUERIES.md)。
+
+網站內也提供 `/database` 頁面，可直接看到目前 cloud database 的 schema、各資料表筆數、PK/FK relationship，以及即時 SQL 查詢結果。
 
 ## ER Diagram
 
@@ -187,11 +190,13 @@ docker run --env-file .env -p 8000:8000 fitness-tracker
 
 ## Live Demo
 
-尚未部署。完成 Render Blueprint 部署後，將在此更新公開網址：
+公開網址：
 
-```text
-https://<your-service-name>.onrender.com
-```
+[https://fitness-tracking-management-system.onrender.com](https://fitness-tracking-management-system.onrender.com)
+
+老師可直接透過網址進入，不需要 GitHub 帳號、不需要 Login / Register。Database System 展示頁位於：
+
+[https://fitness-tracking-management-system.onrender.com/database](https://fitness-tracking-management-system.onrender.com/database)
 
 ## Recommendation Algorithm
 

@@ -1,4 +1,4 @@
-import { Activity, CalendarDays, Plus, Scale, Trash2 } from 'lucide-react'
+import { Activity, CalendarDays, Plus, Scale, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
@@ -22,6 +22,8 @@ export default function HistoryPage() {
   const [records, setRecords] = useState<BodyRecord[]>([])
   const [weight, setWeight] = useState('')
   const [recordedOn, setRecordedOn] = useState(new Date().toISOString().slice(0, 10))
+  const [exerciseSearch, setExerciseSearch] = useState('')
+  const [selectedExercise, setSelectedExercise] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -71,6 +73,39 @@ export default function HistoryPage() {
     }
     return [...summary.entries()].sort((a, b) => b[1].sets - a[1].sets)
   }, [sessions])
+  const exerciseDetails = useMemo(() => {
+    const details = new Map<string, Array<{
+      key: string
+      date: string
+      sessionName: string
+      setNumber: number
+      weight: string
+      reps: number
+      volume: number
+    }>>()
+    for (const session of sessions) {
+      for (const set of session.sets.filter((item) => !item.is_warmup)) {
+        const name = set.exercise.exercise_name
+        const rows = details.get(name) ?? []
+        rows.push({
+          key: `${session.session_id}-${set.workout_set_id}`,
+          date: parseApiDate(session.started_at).toLocaleDateString('zh-TW'),
+          sessionName: session.session_name,
+          setNumber: set.set_number,
+          weight: set.weight_kg,
+          reps: set.reps,
+          volume: Number(set.weight_kg) * set.reps,
+        })
+        details.set(name, rows)
+      }
+    }
+    return details
+  }, [sessions])
+  const filteredExerciseSummary = useMemo(() => (
+    exerciseSummary.filter(([name]) => name.toLowerCase().includes(exerciseSearch.trim().toLowerCase()))
+  ), [exerciseSearch, exerciseSummary])
+  const activeExerciseName = selectedExercise || filteredExerciseSummary[0]?.[0] || ''
+  const activeExerciseRows = exerciseDetails.get(activeExerciseName) ?? []
 
   if (!userId) return <main className="empty-page"><h1>尚未建立健身資料</h1><Link className="button button--primary" to="/onboarding">開始建立</Link></main>
   if (loading) return <LoadingScreen label="正在載入歷史紀錄" />
@@ -98,6 +133,16 @@ export default function HistoryPage() {
       await loadHistory(true)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '無法刪除訓練紀錄。')
+    }
+  }
+
+  async function deleteBodyRecord(recordId: number) {
+    if (!window.confirm('確定刪除這筆體重紀錄嗎？')) return
+    try {
+      await apiRequest<void>(`/users/${userId}/body-records/${recordId}`, { method: 'DELETE' })
+      await loadHistory(true)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '無法刪除體重紀錄。')
     }
   }
 
@@ -136,11 +181,25 @@ export default function HistoryPage() {
       <div className="history-columns">
         <section className="history-section">
           <div className="section-heading"><div><Activity size={24} /><h2>Exercise History</h2></div></div>
+          <label className="search-field history-search"><Search size={18} /><input value={exerciseSearch} onChange={(event) => { setExerciseSearch(event.target.value); setSelectedExercise('') }} placeholder="搜尋 Exercise progress" /></label>
           <div className="ranked-list">
-            {exerciseSummary.slice(0, 8).map(([name, item], index) => (
-              <div key={name}><span>{String(index + 1).padStart(2, '0')}</span><strong>{name}</strong><small>{item.sets} 組</small><em>{item.volume.toLocaleString()} kg</em></div>
+            {filteredExerciseSummary.slice(0, 8).map(([name, item], index) => (
+              <button className={activeExerciseName === name ? 'is-selected' : ''} type="button" key={name} onClick={() => setSelectedExercise(name)}><span>{String(index + 1).padStart(2, '0')}</span><strong>{name}</strong><small>{item.sets} 組</small><em>{item.volume.toLocaleString()} kg</em></button>
             ))}
           </div>
+          {activeExerciseName ? (
+            <div className="exercise-progress-table">
+              <h3>{activeExerciseName} Progress</h3>
+              {activeExerciseRows.map((row) => (
+                <div key={row.key}>
+                  <time>{row.date}</time>
+                  <span>{row.sessionName}</span>
+                  <strong>Set {row.setNumber}: {row.weight}kg × {row.reps}</strong>
+                  <em>{row.volume.toLocaleString()} kg</em>
+                </div>
+              ))}
+            </div>
+          ) : <p className="empty-inline">尚未有 Exercise 紀錄。</p>}
         </section>
         <section className="history-section">
           <div className="section-heading"><div><Scale size={24} /><h2>Weight History</h2></div></div>
@@ -151,7 +210,7 @@ export default function HistoryPage() {
           </form>
           <div className="weight-list">
             {[...records].reverse().map((record) => (
-              <div key={record.body_record_id}><time>{record.recorded_on}</time><strong>{record.weight_kg} kg</strong></div>
+              <div key={record.body_record_id}><time>{record.recorded_on}</time><strong>{record.weight_kg} kg</strong><button type="button" aria-label={`刪除 ${record.recorded_on} 體重紀錄`} onClick={() => void deleteBodyRecord(record.body_record_id)}><Trash2 size={16} /></button></div>
             ))}
           </div>
         </section>

@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, History, Play, UserRound } from 'lucide-react'
+import { BarChart3, BookOpen, CalendarDays, Database, History, Play, UserRound } from 'lucide-react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { getUserId } from '../lib/storage'
 import { Brand } from './Brand'
@@ -8,6 +8,8 @@ const navigation = [
   { to: '/plan', label: '開始訓練', icon: Play },
   { to: '/history', label: '歷史紀錄', icon: History },
   { to: '/dashboard', label: 'Dashboard', icon: BarChart3 },
+  { to: '/exercises', label: '動作資料庫', icon: BookOpen },
+  { to: '/database', label: 'DB Schema', icon: Database },
   { to: '/profile', label: '編輯資料', icon: UserRound },
 ]
 

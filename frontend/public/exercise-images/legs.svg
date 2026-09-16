@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-labelledby="title desc">
+  <title id="title">Leg exercise reference</title>
+  <desc id="desc">A clean illustration showing a squat pattern for leg training.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f0fdf4"/>
+      <stop offset="1" stop-color="#bbf7d0"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="420" rx="34" fill="url(#bg)"/>
+  <rect x="166" y="318" width="308" height="18" rx="9" fill="#0f172a" opacity=".14"/>
+  <circle cx="320" cy="112" r="32" fill="#172033"/>
+  <path d="M260 162c34-29 86-29 120 0l-18 88h-84z" fill="#1769ff"/>
+  <path d="M280 246l-58 72M360 246l58 72" fill="none" stroke="#172033" stroke-width="24" stroke-linecap="round"/>
+  <path d="M224 318h-62M416 318h62" stroke="#172033" stroke-width="20" stroke-linecap="round"/>
+  <path d="M253 217c-47 24-69 59-72 103M387 217c47 24 69 59 72 103" fill="none" stroke="#1769ff" stroke-width="12" stroke-linecap="round"/>
+  <text x="54" y="66" font-family="Arial, sans-serif" font-size="28" font-weight="800" fill="#172033">SQUAT / LEG DRIVE</text>
+  <text x="54" y="96" font-family="Arial, sans-serif" font-size="16" fill="#475569">Knees track toes and feet stay planted</text>
+</svg>

@@ -96,6 +96,7 @@ class ExerciseBase(BaseModel):
     equipment: str = Field(min_length=1, max_length=80)
     movement_type: MovementType
     description: str = Field(min_length=1)
+    image_url: str | None = Field(default=None, max_length=255)
 
 
 class ExerciseCreate(ExerciseBase):
@@ -109,6 +110,7 @@ class ExerciseUpdate(BaseModel):
     equipment: str | None = Field(default=None, min_length=1, max_length=80)
     movement_type: MovementType | None = None
     description: str | None = Field(default=None, min_length=1)
+    image_url: str | None = Field(default=None, max_length=255)
     is_active: bool | None = None
 
 
@@ -120,6 +122,7 @@ class ExerciseRead(ORMModel):
     equipment: str
     movement_type: str
     description: str
+    image_url: str | None
     is_active: bool
 
 
@@ -236,6 +239,9 @@ class RecentWorkout(BaseModel):
 
 
 class DashboardRead(BaseModel):
+    this_week_workouts: int
+    total_completed_workouts: int
+    total_training_volume_kg: float
     completed_workouts: int
     working_sets: int
     training_volume_kg: float
@@ -246,3 +252,39 @@ class DashboardRead(BaseModel):
     weekly_volume: list[MetricPoint]
     weight_history: list[MetricPoint]
     recent_workouts: list[RecentWorkout]
+
+
+class DatabaseColumnRead(BaseModel):
+    column_name: str
+    data_type: str
+    is_primary_key: bool
+    is_nullable: bool
+    foreign_key: str | None
+
+
+class DatabaseTableRead(BaseModel):
+    table_name: str
+    row_count: int
+    columns: list[DatabaseColumnRead]
+
+
+class DatabaseRelationshipRead(BaseModel):
+    from_table: str
+    from_column: str
+    to_table: str
+    to_column: str
+    relationship_type: str
+    on_delete: str | None
+
+
+class DatabaseQueryExampleRead(BaseModel):
+    title: str
+    sql: str
+    rows: list[dict[str, str | int | float | None]]
+
+
+class DatabaseOverviewRead(BaseModel):
+    tables: list[DatabaseTableRead]
+    relationships: list[DatabaseRelationshipRead]
+    query_examples: list[DatabaseQueryExampleRead]
+    normalization_notes: list[str]

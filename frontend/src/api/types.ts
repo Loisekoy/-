@@ -24,6 +24,7 @@ export interface Exercise {
   equipment: string
   movement_type: string
   description: string
+  image_url: string | null
   is_active: boolean
 }
 
@@ -109,6 +110,9 @@ export interface MetricPoint {
 }
 
 export interface DashboardData {
+  this_week_workouts: number
+  total_completed_workouts: number
+  total_training_volume_kg: number
   completed_workouts: number
   working_sets: number
   training_volume_kg: number
@@ -125,4 +129,40 @@ export interface DashboardData {
     set_count: number
     volume_kg: number
   }>
+}
+
+export interface DatabaseColumn {
+  column_name: string
+  data_type: string
+  is_primary_key: boolean
+  is_nullable: boolean
+  foreign_key: string | null
+}
+
+export interface DatabaseTable {
+  table_name: string
+  row_count: number
+  columns: DatabaseColumn[]
+}
+
+export interface DatabaseRelationship {
+  from_table: string
+  from_column: string
+  to_table: string
+  to_column: string
+  relationship_type: string
+  on_delete: string | null
+}
+
+export interface DatabaseQueryExample {
+  title: string
+  sql: string
+  rows: Array<Record<string, string | number | null>>
+}
+
+export interface DatabaseOverview {
+  tables: DatabaseTable[]
+  relationships: DatabaseRelationship[]
+  query_examples: DatabaseQueryExample[]
+  normalization_notes: string[]
 }

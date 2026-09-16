@@ -10,6 +10,8 @@ const ActiveWorkoutPage = lazy(() => import('./pages/ActiveWorkoutPage'))
 const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
+const ExerciseLibraryPage = lazy(() => import('./pages/ExerciseLibraryPage'))
+const DatabaseSystemPage = lazy(() => import('./pages/DatabaseSystemPage'))
 
 export default function App() {
   return (
@@ -23,6 +25,8 @@ export default function App() {
           <Route path="/workout/:planDayId" element={<ActiveWorkoutPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/exercises" element={<ExerciseLibraryPage />} />
+          <Route path="/database" element={<DatabaseSystemPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

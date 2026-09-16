@@ -7,6 +7,12 @@ import { Brand } from '../components/Brand'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { LoadingScreen } from '../components/LoadingScreen'
 import { parseApiDate } from '../lib/datetime'
+import {
+  getExerciseCues,
+  getExerciseImageSrc,
+  getExerciseObjective,
+  getIntensityTip,
+} from '../lib/exerciseGuidance'
 import { getUserId } from '../lib/storage'
 
 interface SetDraft {
@@ -197,9 +203,35 @@ export default function ActiveWorkoutPage() {
       {error ? <ErrorNotice message={error} /> : null}
 
       <section className="current-exercise">
-        <span>當前動作</span>
-        <h2>{currentExercise.exercise.exercise_name}</h2>
-        <p>目標 {currentExercise.target_sets} × {currentExercise.target_reps}・休息 {currentExercise.rest_seconds} 秒</p>
+        <div className="current-exercise__image">
+          <img
+            src={getExerciseImageSrc(currentExercise.exercise)}
+            alt={`${currentExercise.exercise.exercise_name} 參考圖片`}
+          />
+        </div>
+        <div className="current-exercise__content">
+          <span>當前動作</span>
+          <h2>{currentExercise.exercise.exercise_name}</h2>
+          <p>目標 {currentExercise.target_sets} × {currentExercise.target_reps}・休息 {currentExercise.rest_seconds} 秒</p>
+          <p>{getExerciseObjective(currentExercise.exercise)}</p>
+          <div className="active-exercise-tags">
+            <span>{currentExercise.exercise.body_part.name_zh} / {currentExercise.exercise.body_part.name_en}</span>
+            <span>{currentExercise.exercise.equipment}</span>
+            <span>{currentExercise.exercise.difficulty_level}</span>
+          </div>
+          <div className="active-exercise-guidance">
+            <div>
+              <strong>重量建議</strong>
+              <p>{getIntensityTip(currentExercise)}</p>
+            </div>
+            <div>
+              <strong>動作重點</strong>
+              <ul>
+                {getExerciseCues(currentExercise.exercise).map((cue) => <li key={cue}>{cue}</li>)}
+              </ul>
+            </div>
+          </div>
+        </div>
       </section>
 
       <div className="set-table">

@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import get_settings
-from backend.routers import dashboard, exercises, plans, reference, users, workouts
+from backend.routers import dashboard, database_system, exercises, plans, reference, users, workouts
 
 
 def _resolve_frontend_dist() -> Path | None:
@@ -46,6 +46,7 @@ def create_app() -> FastAPI:
     app.include_router(plans.router, prefix="/api")
     app.include_router(workouts.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")
+    app.include_router(database_system.router, prefix="/api")
 
     frontend_dist = _resolve_frontend_dist()
     if frontend_dist is not None:

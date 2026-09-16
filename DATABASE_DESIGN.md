@@ -357,11 +357,12 @@ Shared Exercise Database.
 | `equipment` | `VARCHAR(80)` | No | Example: barbell, dumbbell, machine, bodyweight |
 | `movement_type` | `VARCHAR(20)` | No | CHECK: `compound`, `isolation` |
 | `description` | `TEXT` | No | Exercise description |
+| `image_url` | `VARCHAR(255)` | Yes | Reference image path or URL for plan/workout display |
 | `is_active` | `BOOLEAN` | No | Default `true` |
 | `created_at` | `TIMESTAMPTZ` | No | Default current time |
 | `updated_at` | `TIMESTAMPTZ` | No | Updated whenever the row changes |
 
-`movement_type` is an additional rule input: compound movements are preferred in the first positions of a Plan Day.
+`movement_type` is an additional rule input: compound movements are preferred in the first positions of a Plan Day. `image_url` is stored with the Exercise row so the generated plan and active workout screen can display reference images from the Exercise Database.
 
 ### 5.6 `workout_plans`
 

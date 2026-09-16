@@ -10,7 +10,8 @@ SELECT
     e.exercise_name,
     bp.name_en AS body_part,
     e.difficulty_level,
-    e.equipment
+    e.equipment,
+    e.image_url
 FROM exercises AS e
 JOIN body_parts AS bp
   ON bp.body_part_id = e.body_part_id

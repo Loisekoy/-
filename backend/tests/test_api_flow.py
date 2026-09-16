@@ -25,7 +25,9 @@ def test_health_and_reference_catalogues(client: TestClient) -> None:
     assert client.get("/api/health").json() == {"status": "ok"}
     assert len(client.get("/api/reference/training-goals").json()) == 4
     assert len(client.get("/api/reference/body-parts").json()) == 8
-    assert len(client.get("/api/reference/exercises").json()) >= 30
+    exercises = client.get("/api/reference/exercises").json()
+    assert len(exercises) >= 30
+    assert all(item["image_url"] for item in exercises)
 
 
 def test_complete_onboarding_plan_workout_and_dashboard_flow(client: TestClient) -> None:
@@ -78,10 +80,28 @@ def test_complete_onboarding_plan_workout_and_dashboard_flow(client: TestClient)
     dashboard_response = client.get(f"/api/users/{user_id}/dashboard?days=28")
     assert dashboard_response.status_code == 200, dashboard_response.text
     dashboard = dashboard_response.json()
+    assert dashboard["this_week_workouts"] == 1
+    assert dashboard["total_completed_workouts"] == 1
+    assert dashboard["total_training_volume_kg"] == 1890.0
     assert dashboard["completed_workouts"] == 1
     assert dashboard["working_sets"] == 3
     assert dashboard["training_volume_kg"] == 1890.0
     assert dashboard["most_trained_body_part"] == "Chest"
+
+    database_response = client.get(f"/api/database/overview?user_id={user_id}")
+    assert database_response.status_code == 200, database_response.text
+    database_overview = database_response.json()
+    assert {table["table_name"] for table in database_overview["tables"]} >= {
+        "users",
+        "exercises",
+        "workout_sets",
+    }
+    assert any(
+        relationship["from_table"] == "workout_sets"
+        and relationship["to_table"] == "workout_sessions"
+        for relationship in database_overview["relationships"]
+    )
+    assert any(example["rows"] for example in database_overview["query_examples"])
 
 
 def test_profile_and_body_record_crud(client: TestClient) -> None:
@@ -154,10 +174,12 @@ def test_exercise_search_and_crud_with_foreign_key_safe_delete(client: TestClien
             "equipment": "Cable",
             "movement_type": "isolation",
             "description": "Test exercise for CRUD coverage.",
+            "image_url": "/exercise-images/core.svg",
         },
     )
     assert create_response.status_code == 201, create_response.text
     exercise_id = create_response.json()["exercise_id"]
+    assert create_response.json()["image_url"] == "/exercise-images/core.svg"
 
     duplicate_response = client.post(
         "/api/exercises",

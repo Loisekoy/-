@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-labelledby="title desc">
+  <title id="title">Triceps exercise reference</title>
+  <desc id="desc">A clean illustration showing a triceps extension pattern.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#ecfeff"/>
+      <stop offset="1" stop-color="#bae6fd"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="420" rx="34" fill="url(#bg)"/>
+  <circle cx="320" cy="135" r="33" fill="#172033"/>
+  <path d="M258 187c33-29 91-29 124 0l-19 120h-86z" fill="#1769ff"/>
+  <path d="M260 194l-58-30M380 194l58-30" fill="none" stroke="#172033" stroke-width="22" stroke-linecap="round"/>
+  <path d="M205 164v100M435 164v100" stroke="#172033" stroke-width="22" stroke-linecap="round"/>
+  <path d="M205 194v92M435 194v92" stroke="#1769ff" stroke-width="12" stroke-linecap="round"/>
+  <path d="M181 258l24 31 24-31M411 258l24 31 24-31" fill="none" stroke="#1769ff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="54" y="66" font-family="Arial, sans-serif" font-size="28" font-weight="800" fill="#172033">TRICEPS EXTEND</text>
+  <text x="54" y="96" font-family="Arial, sans-serif" font-size="16" fill="#475569">Fix upper arms and extend through elbows</text>
+</svg>

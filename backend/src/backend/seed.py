@@ -22,6 +22,17 @@ BODY_PARTS = [
     (8, "core", "Core", "核心"),
 ]
 
+BODY_PART_IMAGE_URLS = {
+    "chest": "/exercise-images/chest.svg",
+    "back": "/exercise-images/back.svg",
+    "shoulders": "/exercise-images/shoulders.svg",
+    "biceps": "/exercise-images/biceps.svg",
+    "triceps": "/exercise-images/triceps.svg",
+    "legs": "/exercise-images/legs.svg",
+    "glutes": "/exercise-images/glutes.svg",
+    "core": "/exercise-images/core.svg",
+}
+
 EXERCISES = [
     ("Push-Up", "chest", "beginner", "bodyweight", "compound", "徒手胸推動作。"),
     ("Machine Chest Press", "chest", "beginner", "machine", "compound", "器械胸推。"),
@@ -102,9 +113,13 @@ def seed_database(db: Session) -> None:
     db.flush()
 
     part_ids = dict(db.execute(select(BodyPart.body_part_code, BodyPart.body_part_id)).all())
-    existing_exercises = set(db.scalars(select(Exercise.exercise_name)).all())
+    existing_exercises = {
+        exercise.exercise_name: exercise for exercise in db.scalars(select(Exercise)).all()
+    }
     for name, part_code, difficulty, equipment, movement, description in EXERCISES:
-        if name not in existing_exercises:
+        image_url = BODY_PART_IMAGE_URLS[part_code]
+        existing_exercise = existing_exercises.get(name)
+        if existing_exercise is None:
             db.add(
                 Exercise(
                     exercise_name=name,
@@ -113,8 +128,11 @@ def seed_database(db: Session) -> None:
                     equipment=equipment,
                     movement_type=movement,
                     description=description,
+                    image_url=image_url,
                 )
             )
+        else:
+            existing_exercise.image_url = existing_exercise.image_url or image_url
     db.commit()
 
 

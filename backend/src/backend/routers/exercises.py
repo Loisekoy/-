@@ -46,7 +46,7 @@ def update_exercise(exercise_id: int, payload: ExerciseUpdate, db: SessionDep) -
     if "body_part_id" in changes and db.get(BodyPart, changes["body_part_id"]) is None:
         raise HTTPException(status_code=422, detail="Invalid body part")
     for key, value in changes.items():
-        if key == "exercise_name" and isinstance(value, str):
+        if key in {"exercise_name", "image_url"} and isinstance(value, str):
             value = value.strip()
         setattr(exercise, key, value)
     try:

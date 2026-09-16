@@ -22,7 +22,11 @@ export default function HomePage() {
               <Link className="button button--secondary button--large" to="/onboarding">
                 建立新資料
               </Link>
-            ) : null}
+            ) : (
+              <Link className="button button--secondary button--large" to="/database">
+                查看資料庫系統
+              </Link>
+            )}
           </div>
           <p className="home-hero__privacy">
             不需要登入或密碼。資料識別碼只保存在你的瀏覽器；請勿輸入敏感個資。
