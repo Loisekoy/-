@@ -23,7 +23,7 @@
 - Frontend：React、TypeScript、Vite、React Router、Recharts
 - Backend：FastAPI、SQLAlchemy 2、Pydantic
 - Database：PostgreSQL、Alembic migrations
-- Deployment：Docker + Render Web Service；建議搭配 Neon PostgreSQL
+- Deployment：Docker + Render Blueprint；Render 會建立 Web Service 與 Cloud PostgreSQL
 
 ```mermaid
 flowchart LR
@@ -167,21 +167,27 @@ docker run --env-file .env -p 8000:8000 fitness-tracker
 
 ## Deployment
 
-建議組合：Neon PostgreSQL + Render Web Service。
+最簡單部署方式：Render Blueprint。`render.yaml` 會同時建立：
 
-1. 在 Neon 建立 PostgreSQL project，複製 connection string。
-2. 將此 repository push 到 GitHub。
-3. 在 Render 選擇 **New → Blueprint**，連接 repository；Render 會讀取根目錄的 `render.yaml` 與 `Dockerfile`。
-4. Render 要求 `DATABASE_URL` 時，貼上 Neon connection string。不要把它寫入 GitHub。
+- Docker Web Service：`fitness-tracking-management-system`
+- Cloud PostgreSQL：`fitness-tracking-management-system-db`
+- `DATABASE_URL`：由 Render 用 `fromDatabase.connectionString` 自動注入，不需要手動貼到 GitHub 或程式碼
+
+部署步驟：
+
+1. 將此 repository push 到 GitHub。
+2. 在 Render 選擇 **New → Blueprint**。
+3. 連接 repository：`https://github.com/Loisekoy/-.git`。
+4. Render 會讀取根目錄的 `render.yaml` 與 `Dockerfile`，並自動建立 Web Service + PostgreSQL。
 5. 部署啟動時會自動執行 `alembic upgrade head` 與 idempotent seed。
 6. 健康檢查路徑為 `/api/health`；API 文件為 `/docs`。
 7. 部署完成後，任何人都可直接開啟 Render 的公開 HTTPS URL，不需要 GitHub 帳號或網站登入。
 
-若改用 Render Free PostgreSQL，請注意其資料庫目前會在建立 30 天後到期；課程長期展示建議使用不設 30 天到期的 Neon Free plan，或升級付費 PostgreSQL。
+注意：Render Free PostgreSQL 目前會在建立 30 天後到期；如果課程需要長期保存 Demo，可改成 Neon Free PostgreSQL 或升級付費 PostgreSQL。若改用 Neon，只要把 `render.yaml` 的 `DATABASE_URL` 改回 `sync: false`，並在 Render Dashboard 手動填入 Neon connection string。
 
 ## Live Demo
 
-尚未部署。完成 GitHub remote 與雲端帳號授權後，將在此更新公開網址：
+尚未部署。完成 Render Blueprint 部署後，將在此更新公開網址：
 
 ```text
 https://<your-service-name>.onrender.com
