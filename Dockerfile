@@ -11,7 +11,8 @@ FROM python:3.14-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8000
+    PORT=8000 \
+    FRONTEND_DIST_DIR=/app/frontend/dist
 
 WORKDIR /app
 COPY backend/ /app/backend/

@@ -9,6 +9,22 @@ from backend.config import get_settings
 from backend.routers import dashboard, exercises, plans, reference, users, workouts
 
 
+def _resolve_frontend_dist() -> Path | None:
+    settings = get_settings()
+    candidates = [
+        Path(settings.frontend_dist_dir).expanduser()
+        if settings.frontend_dist_dir is not None
+        else None,
+        Path(__file__).resolve().parents[3] / "frontend" / "dist",
+        Path.cwd().parent / "frontend" / "dist",
+        Path("/app/frontend/dist"),
+    ]
+    for candidate in candidates:
+        if candidate is not None and candidate.is_dir():
+            return candidate.resolve()
+    return None
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.app_name, version="0.1.0")
@@ -31,8 +47,8 @@ def create_app() -> FastAPI:
     app.include_router(workouts.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")
 
-    frontend_dist = Path(__file__).resolve().parents[3] / "frontend" / "dist"
-    if frontend_dist.is_dir():
+    frontend_dist = _resolve_frontend_dist()
+    if frontend_dist is not None:
         assets_dir = frontend_dist / "assets"
         if assets_dir.is_dir():
             app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend-assets")

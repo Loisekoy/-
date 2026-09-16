@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     database_url: str = Field(alias="DATABASE_URL")
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
     frontend_url: str = Field(default="http://localhost:5173", alias="FRONTEND_URL")
+    frontend_dist_dir: str | None = Field(default=None, alias="FRONTEND_DIST_DIR")
 
     model_config = SettingsConfigDict(
         env_file=".env",
