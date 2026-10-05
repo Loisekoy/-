@@ -4,9 +4,9 @@ services:
     runtime: docker
     plan: free
     region: singapore
-    rootDir: codex生成/php-app
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    rootDir: .
+    dockerfilePath: ./codex生成/php-app/Dockerfile
+    dockerContext: ./codex生成/php-app
     healthCheckPath: /api/health
     autoDeployTrigger: commit
     envVars:
