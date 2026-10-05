@@ -1,41 +1,31 @@
 services:
   - type: web
-    name: fitness-tracking-management-system
+    name: fittrack-pro-php
     runtime: docker
     plan: free
+    region: singapore
+    rootDir: codex生成/php-app
     dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /api/health
     autoDeployTrigger: commit
     envVars:
       - key: APP_ENV
         value: production
+      - key: APP_KEY
+        generateValue: true
       - key: DATABASE_URL
         fromDatabase:
-          name: fitness-tracking-management-system-db
+          name: fittrack-pro-db
           property: connectionString
-      - key: SECRET_KEY
-        generateValue: true
-      - key: ADMIN_BOOTSTRAP_USERNAME
-        value: admin
+      - key: DEMO_BOOTSTRAP_PASSWORD
+        sync: false
       - key: ADMIN_BOOTSTRAP_PASSWORD
         sync: false
-      - key: EXERCISEDB_API_URL
-        value: https://oss.exercisedb.dev/api/v1/exercises
-      - key: EXERCISEDB_SYNC_ON_SEED
-        value: "true"
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENAI_MODEL
-        value: gpt-4.1-mini
-      - key: LLM_FORCE_FAILURE
-        value: "false"
-      - key: LLM_TIMEOUT_SECONDS
-        value: "25"
-      - key: CORS_ORIGINS
-        value: ""
 
 databases:
-  - name: fitness-tracking-management-system-db
+  - name: fittrack-pro-db
     plan: free
-    databaseName: fitness_tracker
-    user: fitness_tracker
+    region: singapore
+    databaseName: fittrack
+    user: fittrack
