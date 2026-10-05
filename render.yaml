@@ -23,9 +23,9 @@ services:
       - key: ADMIN_BOOTSTRAP_PASSWORD
         sync: false
       - key: AI_API_KEY
-        sync: false
+        value: ""
       - key: AI_MODEL
-        sync: false
+        value: ""
       - key: AI_API_URL
         value: https://api.openai.com/v1/chat/completions
 
