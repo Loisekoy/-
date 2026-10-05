@@ -39,6 +39,13 @@ try {
     $user = Auth::user($pdo, $login['access_token']);
     check($user['role'] === 'USER', '會員 JWT 可驗證');
 
+    $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . $login['access_token'];
+    [$aiStatusCode, $aiStatus] = (new Api($pdo))->dispatch('GET', '/ai/status');
+    check(
+        $aiStatusCode === 200 && $aiStatus['enabled'] === false && $aiStatus['secret_configured'] === false,
+        '未設定模型金鑰時安全停用 AI，且不影響規則式功能'
+    );
+
     $plan = PlanGenerator::generate($pdo, (int) $user['user_id'], 'Smoke Test Plan');
     check(count($plan['days']) === 4, '依每週天數產生完整課表');
     check(count($plan['days'][0]['exercises']) >= 3, '課表日包含至少三個動作');

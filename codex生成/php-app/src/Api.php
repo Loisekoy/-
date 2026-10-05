@@ -107,6 +107,9 @@ final class Api
         if ($method === 'GET' && $path === '/plans') {
             return [200, ['items' => PlanGenerator::listPlans($this->pdo, (int) $user['user_id'])]];
         }
+        if ($method === 'GET' && $path === '/ai/status') {
+            return [200, AiPlanGenerator::status()];
+        }
         if (preg_match('#^/plans/(\d+)$#', $path, $matches) && $method === 'GET') {
             return [200, PlanGenerator::findPlan(
                 $this->pdo,
@@ -119,6 +122,14 @@ final class Api
                 $this->pdo,
                 (int) $user['user_id'],
                 isset($input['plan_name']) ? (string) $input['plan_name'] : null
+            )];
+        }
+        if ($method === 'POST' && $path === '/plans/ai-generate') {
+            return [201, AiPlanGenerator::generate(
+                $this->pdo,
+                (int) $user['user_id'],
+                isset($input['plan_name']) ? (string) $input['plan_name'] : null,
+                isset($input['focus']) ? (string) $input['focus'] : null
             )];
         }
         if (preg_match('#^/plans/(\d+)$#', $path, $matches) && $method === 'PATCH') {

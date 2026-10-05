@@ -838,9 +838,29 @@ main {
 
 .plan-create-form {
     display: grid;
-    width: min(100%, 470px);
-    grid-template-columns: minmax(180px, 1fr) auto;
+    width: min(100%, 560px);
+    grid-template-columns: minmax(180px, 1fr) minmax(150px, 190px) auto;
     gap: 10px;
+}
+
+.plan-create-form textarea,
+.plan-generator-status {
+    grid-column: 1 / -1;
+}
+
+.plan-create-form textarea {
+    min-height: 76px;
+    resize: vertical;
+}
+
+.plan-generator-status {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.plan-generator-status.is-ready {
+    color: #22643c;
 }
 
 .plan-title-row,
@@ -1306,6 +1326,74 @@ main {
     border-bottom-color: var(--accent);
 }
 
+.ai-settings {
+    margin-top: 28px;
+    border-top: 1px solid var(--line-strong);
+    border-bottom: 1px solid var(--line-strong);
+}
+
+.ai-settings-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 26px 0;
+}
+
+.ai-state {
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    border: 1px solid #b42318;
+    color: #b42318;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.ai-state.is-ready {
+    border-color: #287a49;
+    color: #287a49;
+}
+
+.ai-settings-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0;
+    border-top: 1px solid var(--line);
+}
+
+.ai-settings-list > div {
+    padding: 20px 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.ai-settings-list > div:nth-child(odd) {
+    padding-right: 24px;
+    border-right: 1px solid var(--line);
+}
+
+.ai-settings-list > div:nth-child(even) {
+    padding-left: 24px;
+}
+
+.ai-settings-list dt {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.ai-settings-list dd {
+    margin: 8px 0 0;
+    overflow-wrap: anywhere;
+    color: var(--muted);
+}
+
+.ai-settings-note {
+    margin: 0;
+    padding: 22px 0;
+    color: var(--muted);
+    line-height: 1.7;
+}
+
 .database-overview {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1705,6 +1793,26 @@ main {
     .plan-create-form {
         width: 100%;
         grid-template-columns: 1fr;
+    }
+
+    .plan-create-form textarea,
+    .plan-generator-status {
+        grid-column: auto;
+    }
+
+    .ai-settings-heading {
+        flex-direction: column;
+    }
+
+    .ai-settings-list {
+        grid-template-columns: 1fr;
+    }
+
+    .ai-settings-list > div:nth-child(odd),
+    .ai-settings-list > div:nth-child(even) {
+        padding-right: 0;
+        padding-left: 0;
+        border-right: 0;
     }
 
     .hero {

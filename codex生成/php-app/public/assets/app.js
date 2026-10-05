@@ -32,10 +32,15 @@ const formatNumber = (value, digits = 0) => new Intl.NumberFormat('zh-TW', {
     maximumFractionDigits: digits,
 }).format(Number(value || 0));
 
+const normalizeDateValue = (value) => {
+    const text = String(value || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text}T00:00:00`;
+    return text.replace(' ', 'T');
+};
+
 const formatDate = (value) => {
     if (!value) return '-';
-    const normalized = String(value).includes('T') ? value : `${value}T00:00:00`;
-    return new Intl.DateTimeFormat('zh-TW', { dateStyle: 'medium' }).format(new Date(normalized));
+    return new Intl.DateTimeFormat('zh-TW', { dateStyle: 'medium' }).format(new Date(normalizeDateValue(value)));
 };
 
 const formatDateTime = (value) => {
@@ -43,7 +48,7 @@ const formatDateTime = (value) => {
     return new Intl.DateTimeFormat('zh-TW', {
         dateStyle: 'medium',
         timeStyle: 'short',
-    }).format(new Date(value));
+    }).format(new Date(normalizeDateValue(value)));
 };
 
 function showToast(message, type = 'success') {
@@ -307,7 +312,11 @@ function historyTable(items, compact = false) {
 
 async function renderPlans() {
     loading();
-    const [result, exerciseResult] = await Promise.all([api('/plans'), api('/exercises')]);
+    const [result, exerciseResult, aiStatus] = await Promise.all([
+        api('/plans'),
+        api('/exercises'),
+        api('/ai/status'),
+    ]);
     state.plans = result.items || [];
     if (!state.selectedPlanId && state.plans.length) {
         state.selectedPlanId = Number(state.plans[0].workout_plan_id);
@@ -320,7 +329,15 @@ async function renderPlans() {
                 <div><h1 class="page-title zh">我的訓練課表</h1><p class="page-subtitle">依照目標、程度、偏好部位與可用時間產生課表。</p></div>
                 <form id="generate-plan-form" class="plan-create-form">
                     <input name="plan_name" maxlength="120" placeholder="新課表名稱（可留白）" aria-label="新課表名稱">
+                    <select name="generation_mode" id="generation-mode" aria-label="課表產生方式">
+                        <option value="rules">規則式規劃</option>
+                        <option value="ai" ${aiStatus.enabled ? '' : 'disabled'}>AI 規劃${aiStatus.enabled ? '' : '（尚未設定）'}</option>
+                    </select>
+                    <textarea name="focus" id="ai-planning-focus" maxlength="600" rows="2" placeholder="AI 規劃需求，例如：希望加強胸背、避免高衝擊動作" aria-label="AI 規劃需求" hidden disabled></textarea>
                     <button class="button button-primary" type="submit">新增規劃</button>
+                    <p class="plan-generator-status ${aiStatus.enabled ? 'is-ready' : ''}">${aiStatus.enabled
+                        ? `AI 已啟用 · ${escapeHtml(aiStatus.model || '')} · ${escapeHtml(aiStatus.endpoint_host || '')}`
+                        : 'AI 尚未設定，規則式課表仍可正常使用。'}</p>
                 </form>
             </div>
             ${state.plans.length > 1 ? `
@@ -627,6 +644,7 @@ async function renderAdmin() {
         api('/admin/exercises'),
         state.adminTab === 'database' ? api('/admin/database/overview') : Promise.resolve(null),
     ]);
+    const aiStatus = state.adminTab === 'ai' ? await api('/ai/status') : null;
     let databaseTable = null;
     if (databaseOverview) {
         if (!databaseOverview.tables.some((table) => table.table_name === state.adminSelectedTable)) {
@@ -634,7 +652,9 @@ async function renderAdmin() {
         }
         databaseTable = await api(`/admin/database/tables/${state.adminSelectedTable}`);
     }
-    const content = state.adminTab === 'database'
+    const content = state.adminTab === 'ai'
+        ? renderAiSettings(aiStatus)
+        : state.adminTab === 'database'
         ? renderDatabaseSystem(databaseOverview, databaseTable)
         : state.adminTab === 'exercises'
         ? `<form id="admin-exercise-form" class="form-grid two-columns" style="margin-top:24px;padding-bottom:24px;border-bottom:1px solid var(--line)">
@@ -654,9 +674,26 @@ async function renderAdmin() {
             <div class="admin-grid">
                 ${Object.entries({ users: '會員', exercises: '動作', plans: '課表', completed_workouts: '完成訓練', sets: '訓練組數' }).map(([key, label]) => `<div class="admin-stat"><span class="stat-label">${label}</span><strong>${formatNumber(stats[key])}</strong></div>`).join('')}
             </div>
-            <div class="tabs"><button class="tab ${state.adminTab === 'users' ? 'is-active' : ''}" data-action="admin-tab" data-tab="users">會員清單</button><button class="tab ${state.adminTab === 'exercises' ? 'is-active' : ''}" data-action="admin-tab" data-tab="exercises">動作管理</button><button class="tab ${state.adminTab === 'database' ? 'is-active' : ''}" data-action="admin-tab" data-tab="database">資料庫系統</button></div>
+            <div class="tabs"><button class="tab ${state.adminTab === 'users' ? 'is-active' : ''}" data-action="admin-tab" data-tab="users">會員清單</button><button class="tab ${state.adminTab === 'exercises' ? 'is-active' : ''}" data-action="admin-tab" data-tab="exercises">動作管理</button><button class="tab ${state.adminTab === 'database' ? 'is-active' : ''}" data-action="admin-tab" data-tab="database">資料庫系統</button><button class="tab ${state.adminTab === 'ai' ? 'is-active' : ''}" data-action="admin-tab" data-tab="ai">模型接口</button></div>
             ${content}
         </div>`;
+}
+
+function renderAiSettings(status) {
+    return `
+        <section class="ai-settings" aria-label="模型 API 接口">
+            <div class="ai-settings-heading">
+                <div><h2 class="section-heading">模型 API 接口</h2><p class="section-copy">金鑰只儲存在 Render 環境設定，不會寫入資料庫或傳送到瀏覽器。</p></div>
+                <span class="ai-state ${status.enabled ? 'is-ready' : ''}">${status.enabled ? '已啟用' : '尚未設定'}</span>
+            </div>
+            <dl class="ai-settings-list">
+                <div><dt>AI_API_KEY</dt><dd>${status.secret_configured ? '已安全設定' : '等待你在 Render 填入'}</dd></div>
+                <div><dt>AI_MODEL</dt><dd>${escapeHtml(status.model || '等待設定')}</dd></div>
+                <div><dt>AI_API_URL</dt><dd>${escapeHtml(status.endpoint_host || '等待設定')}</dd></div>
+                <div><dt>接口格式</dt><dd>${escapeHtml(status.provider)}</dd></div>
+            </dl>
+            <p class="ai-settings-note">設定完成後，會員可在「我的課表」選擇 AI 規劃並輸入訓練需求。模型輸出仍須通過動作 ID、程度、天數、組次與休息時間驗證。</p>
+        </section>`;
 }
 
 function renderDatabaseSystem(overview, tableData) {
@@ -926,6 +963,12 @@ document.addEventListener('change', async (event) => {
         state.selectedDayIndex = 0;
         state.planEditing = false;
         await renderPlans();
+    } else if (event.target.matches('#generation-mode')) {
+        const focus = document.querySelector('#ai-planning-focus');
+        const isAi = event.target.value === 'ai';
+        focus.hidden = !isAi;
+        focus.disabled = !isAi;
+        if (isAi) focus.focus();
     }
 });
 
@@ -951,14 +994,18 @@ document.addEventListener('submit', async (event) => {
             state.exerciseFilters = values;
             await renderExercises();
         } else if (form.id === 'generate-plan-form') {
-            const plan = await api('/plans/generate', {
+            const isAi = values.generation_mode === 'ai';
+            const plan = await api(isAi ? '/plans/ai-generate' : '/plans/generate', {
                 method: 'POST',
-                body: JSON.stringify({ plan_name: values.plan_name || null }),
+                body: JSON.stringify({
+                    plan_name: values.plan_name || null,
+                    focus: isAi ? values.focus || null : null,
+                }),
             });
             state.selectedPlanId = Number(plan.workout_plan_id);
             state.selectedDayIndex = 0;
             state.planEditing = false;
-            showToast('新的訓練規劃已建立。');
+            showToast(isAi ? 'AI 訓練規劃已建立。' : '新的規則式訓練規劃已建立。');
             await renderPlans();
         } else if (form.id === 'profile-form') {
             state.me = await api('/me/profile', { method: 'PUT', body: JSON.stringify(values) });
