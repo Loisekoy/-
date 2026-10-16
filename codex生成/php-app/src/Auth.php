@@ -32,7 +32,7 @@ final class Auth
             throw new ApiException(409, 'EMAIL_EXISTS', '這個 Email 已經註冊。');
         }
 
-        $pdo->beginTransaction();
+        Database::beginTransaction($pdo);
         try {
             $userId = Database::insert(
                 $pdo,
@@ -46,7 +46,7 @@ final class Auth
                 [$userId, $email, password_hash($password, PASSWORD_BCRYPT, ['cost' => 10])],
                 'auth_id'
             );
-            $result = self::createSession($pdo, $authId, $userId, 'USER');
+            $result = self::createSession($pdo, $authId, $userId, 'USER', $name, $email);
             $pdo->commit();
             return $result;
         } catch (\Throwable $error) {
@@ -60,9 +60,10 @@ final class Auth
         $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
         $password = (string) ($input['password'] ?? '');
         $statement = $pdo->prepare(
-            'SELECT ua.auth_id, ua.user_id, ua.password_hash, ua.is_active, '
+            'SELECT ua.auth_id, ua.user_id, ua.email, ua.password_hash, ua.is_active, u.name, '
             . 'CASE WHEN a.user_id IS NULL THEN 0 ELSE 1 END AS is_admin '
-            . 'FROM user_auth ua LEFT JOIN admins a ON a.user_id = ua.user_id WHERE ua.email = ?'
+            . 'FROM user_auth ua JOIN users u ON u.user_id = ua.user_id '
+            . 'LEFT JOIN admins a ON a.user_id = ua.user_id WHERE ua.email = ?'
         );
         $statement->execute([$email]);
         $row = $statement->fetch();
@@ -75,7 +76,9 @@ final class Auth
             $pdo,
             (int) $row['auth_id'],
             (int) $row['user_id'],
-            (int) $row['is_admin'] === 1 ? 'ADMIN' : 'USER'
+            (int) $row['is_admin'] === 1 ? 'ADMIN' : 'USER',
+            (string) $row['name'],
+            (string) $row['email']
         );
     }
 
@@ -136,7 +139,7 @@ final class Auth
             throw new ApiException(422, 'INVALID_PASSWORD', '新密碼需為 10 至 72 bytes，且至少包含英文字母與數字。');
         }
 
-        $pdo->beginTransaction();
+        Database::beginTransaction($pdo);
         try {
             $pdo->prepare('UPDATE user_auth SET password_hash = ? WHERE auth_id = ?')->execute([
                 password_hash($new, PASSWORD_BCRYPT, ['cost' => 10]),
@@ -165,7 +168,7 @@ final class Auth
             throw new ApiException(401, 'INVALID_CURRENT_PASSWORD', '目前密碼不正確。');
         }
 
-        $pdo->beginTransaction();
+        Database::beginTransaction($pdo);
         try {
             $pdo->prepare('UPDATE user_auth SET is_active = FALSE WHERE auth_id = ?')->execute([
                 (int) $user['auth_id'],
@@ -181,7 +184,14 @@ final class Auth
         }
     }
 
-    private static function createSession(PDO $pdo, int $authId, int $userId, string $role): array
+    private static function createSession(
+        PDO $pdo,
+        int $authId,
+        int $userId,
+        string $role,
+        string $name,
+        string $email
+    ): array
     {
         $jti = self::uuidV4();
         $issuedAt = time();
@@ -198,12 +208,13 @@ final class Auth
         $payload = [
             'sub' => (string) $userId,
             'jti' => $jti,
-            'role' => $role,
             'iat' => $issuedAt,
             'exp' => $expiresAt,
         ];
         return [
             'user_id' => $userId,
+            'name' => $name,
+            'email' => $email,
             'role' => $role,
             'access_token' => self::encode($payload),
             'token_type' => 'Bearer',
@@ -230,14 +241,36 @@ final class Auth
             throw new ApiException(401, 'TOKEN_INVALID', '登入憑證格式不正確。');
         }
         [$header, $payload, $signature] = $segments;
+        try {
+            $decodedHeader = json_decode(self::base64UrlDecode($header), true, 8, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            throw new ApiException(401, 'TOKEN_INVALID', '登入憑證標頭不正確。');
+        }
+        if (!is_array($decodedHeader) || ($decodedHeader['alg'] ?? null) !== 'HS256'
+            || ($decodedHeader['typ'] ?? null) !== 'JWT') {
+            throw new ApiException(401, 'TOKEN_INVALID', '登入憑證演算法不受支援。');
+        }
         $expected = self::base64UrlEncode(
             hash_hmac('sha256', $header . '.' . $payload, Config::appKey(), true)
         );
         if (!hash_equals($expected, $signature)) {
             throw new ApiException(401, 'TOKEN_INVALID', '登入憑證簽章無效。');
         }
-        $decoded = json_decode(self::base64UrlDecode($payload), true);
-        if (!is_array($decoded) || (int) ($decoded['exp'] ?? 0) <= time()) {
+        try {
+            $decoded = json_decode(self::base64UrlDecode($payload), true, 8, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            throw new ApiException(401, 'TOKEN_INVALID', '登入憑證內容不正確。');
+        }
+        if (!is_array($decoded)
+            || !is_string($decoded['sub'] ?? null) || !ctype_digit($decoded['sub']) || (int) $decoded['sub'] < 1
+            || !is_string($decoded['jti'] ?? null)
+            || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $decoded['jti'])
+            || !is_int($decoded['iat'] ?? null) || !is_int($decoded['exp'] ?? null)
+            || $decoded['iat'] < 1 || $decoded['iat'] > time() + 60
+            || $decoded['exp'] !== $decoded['iat'] + 7200) {
+            throw new ApiException(401, 'TOKEN_INVALID', '登入憑證必要欄位不正確。');
+        }
+        if ($decoded['exp'] <= time()) {
             throw new ApiException(401, 'TOKEN_EXPIRED', '登入已逾時，請重新登入。');
         }
         return $decoded;
@@ -256,7 +289,7 @@ final class Auth
         }
         $decoded = base64_decode(strtr($value, '-_', '+/'), true);
         if ($decoded === false) {
-            throw new RuntimeException('Invalid base64 token.');
+            throw new ApiException(401, 'TOKEN_INVALID', '登入憑證編碼不正確。');
         }
         return $decoded;
     }

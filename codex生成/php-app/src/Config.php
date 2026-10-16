@@ -48,6 +48,25 @@ final class Config
 
     public static function appKey(): string
     {
-        return self::get('APP_KEY', 'local-development-key-change-before-deploy') ?? '';
+        $key = self::get('SECRET_KEY', self::get('APP_KEY', 'local-development-key-change-before-deploy')) ?? '';
+        if (self::isProduction()
+            && ($key === 'local-development-key-change-before-deploy' || strlen($key) < 32)) {
+            throw new \RuntimeException('Production SECRET_KEY must be explicitly configured with at least 32 bytes.');
+        }
+        return $key;
+    }
+
+    public static function isProduction(): bool
+    {
+        return strtolower(self::get('APP_ENV', 'development') ?? 'development') === 'production';
+    }
+
+    public static function rateLimitSecret(): string
+    {
+        $secret = self::get('RATE_LIMIT_SECRET', self::appKey()) ?? self::appKey();
+        if (self::isProduction() && strlen($secret) < 32) {
+            throw new \RuntimeException('Production RATE_LIMIT_SECRET must be at least 32 bytes.');
+        }
+        return $secret;
     }
 }

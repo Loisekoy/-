@@ -4,7 +4,8 @@ services:
     runtime: docker
     plan: free
     region: singapore
-    rootDir: .
+    branch: codex/fitness-tracking-system
+    rootDir: codex生成/php-app
     dockerfilePath: ./codex生成/php-app/Dockerfile
     dockerContext: ./codex生成/php-app
     healthCheckPath: /api/health
@@ -12,16 +13,18 @@ services:
     envVars:
       - key: APP_ENV
         value: production
-      - key: APP_KEY
+      - key: SECRET_KEY
+        generateValue: true
+      - key: RATE_LIMIT_SECRET
         generateValue: true
       - key: DATABASE_URL
         fromDatabase:
           name: fittrack-pro-db
           property: connectionString
       - key: DEMO_BOOTSTRAP_PASSWORD
-        sync: false
+        value: Demo12345
       - key: ADMIN_BOOTSTRAP_PASSWORD
-        sync: false
+        generateValue: true
       - key: AI_API_KEY
         value: ""
       - key: AI_MODEL

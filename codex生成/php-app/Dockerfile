@@ -22,4 +22,4 @@ RUN mkdir -p storage public/media/exercises \
 
 EXPOSE 80
 
-CMD ["sh", "-c", "php bin/setup.php && apache2-foreground"]
+CMD ["sh", "-c", "php bin/migrate.php && php bin/setup.php && apache2-foreground"]

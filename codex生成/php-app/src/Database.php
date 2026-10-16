@@ -33,6 +33,7 @@ final class Database
                 urldecode($parts['pass'] ?? ''),
                 self::options()
             );
+            self::$pdo->exec('SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED');
         } elseif ($databaseUrl && str_starts_with($databaseUrl, 'pgsql:')) {
             self::$pdo = new PDO(
                 $databaseUrl,
@@ -40,6 +41,7 @@ final class Database
                 Config::get('DB_PASSWORD', ''),
                 self::options()
             );
+            self::$pdo->exec('SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED');
         } else {
             $sqlitePath = Config::get('SQLITE_PATH', Config::root() . '/storage/app.sqlite');
             if ($sqlitePath === null) {
@@ -51,7 +53,7 @@ final class Database
             }
             self::$pdo = new PDO('sqlite:' . $sqlitePath, null, null, self::options());
             self::$pdo->exec('PRAGMA foreign_keys = ON');
-            self::ensureSqliteSchema(self::$pdo);
+            self::ensureSqliteSchema(self::$pdo, $sqlitePath);
         }
 
         return self::$pdo;
@@ -75,6 +77,14 @@ final class Database
         return (int) $pdo->lastInsertId();
     }
 
+    public static function beginTransaction(PDO $pdo): void
+    {
+        $pdo->beginTransaction();
+        if ((string) $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql') {
+            $pdo->exec('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+        }
+    }
+
     private static function options(): array
     {
         return [
@@ -84,7 +94,7 @@ final class Database
         ];
     }
 
-    private static function ensureSqliteSchema(PDO $pdo): void
+    private static function ensureSqliteSchema(PDO $pdo, string $sqlitePath): void
     {
         if (self::$initialized) {
             return;
@@ -95,6 +105,7 @@ final class Database
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='users'"
         )->fetchColumn();
         if ((int) $hasUsers > 0) {
+            SqliteMigrator::migrateIfNeeded($pdo, $sqlitePath);
             return;
         }
 

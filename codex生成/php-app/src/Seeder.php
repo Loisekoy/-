@@ -78,11 +78,6 @@ final class Seeder
         }
 
         $counts = array_fill_keys(array_keys($partIds), 0);
-        $insert = $pdo->prepare(
-            'INSERT INTO exercises '
-            . '(exercise_name, body_part_id, difficulty_level, equipment, description, image_url, is_active) '
-            . 'VALUES (?, ?, ?, ?, ?, ?, TRUE)'
-        );
         $mediaDir = Config::root() . '/public/media/exercises';
         if (!is_dir($mediaDir)) {
             mkdir($mediaDir, 0775, true);
@@ -117,7 +112,7 @@ final class Seeder
                 ))
                 : (string) ($record['instructions']['zh'] ?? $record['instructions']['en'] ?? '請依正確姿勢完成動作。');
             $description .= "\n\n媒體來源：" . (string) ($record['attribution'] ?? 'Gym visual');
-            $insert->execute([
+            self::insertExercise($pdo, [
                 trim((string) ($record['name'] ?? 'Exercise')) . ' #' . (string) ($record['id'] ?? ''),
                 $partIds[$part],
                 $difficulty,
@@ -134,17 +129,12 @@ final class Seeder
 
     private static function seedBundledExercises(PDO $pdo, array $partIds, array $records): void
     {
-        $insert = $pdo->prepare(
-            'INSERT INTO exercises '
-            . '(exercise_name, body_part_id, difficulty_level, equipment, description, image_url, is_active) '
-            . 'VALUES (?, ?, ?, ?, ?, ?, TRUE)'
-        );
         foreach ($records as $record) {
             $part = (string) ($record['body_part_name'] ?? '');
             if (!isset($partIds[$part])) {
                 continue;
             }
-            $insert->execute([
+            self::insertExercise($pdo, [
                 (string) $record['exercise_name'],
                 $partIds[$part],
                 (string) $record['difficulty_level'],
@@ -184,22 +174,42 @@ final class Seeder
 
     private static function seedFallbackExercises(PDO $pdo, array $partIds): void
     {
-        $insert = $pdo->prepare(
-            'INSERT INTO exercises '
-            . '(exercise_name, body_part_id, difficulty_level, equipment, description, image_url, is_active) '
-            . 'VALUES (?, ?, ?, ?, ?, NULL, TRUE)'
-        );
         foreach (array_keys($partIds) as $part) {
             for ($index = 1; $index <= 3; $index++) {
-                $insert->execute([
+                self::insertExercise($pdo, [
                     $part . ' 基礎動作 ' . $index,
                     $partIds[$part],
                     'Beginner',
                     'Bodyweight',
                     '保持穩定呼吸與可控制的動作速度。',
+                    null,
                 ]);
             }
         }
+    }
+
+    /** @param array{0:string,1:int,2:string,3:?string,4:string,5:?string} $values */
+    private static function insertExercise(PDO $pdo, array $values): int
+    {
+        $exerciseId = Database::insert(
+            $pdo,
+            'INSERT INTO exercises (body_part_id, is_active) VALUES (?, TRUE)',
+            [(int) $values[1]],
+            'exercise_id'
+        );
+        $pdo->prepare(
+            'INSERT INTO exercise_versions '
+            . '(exercise_id, version_no, exercise_name, difficulty_level, equipment, description, image_url) '
+            . 'VALUES (?, 1, ?, ?, ?, ?, ?)'
+        )->execute([
+            $exerciseId,
+            $values[0],
+            $values[2],
+            $values[3],
+            $values[4],
+            $values[5],
+        ]);
+        return $exerciseId;
     }
 
     private static function seedDemoAccounts(PDO $pdo): void
@@ -254,5 +264,8 @@ final class Seeder
         $pdo->prepare(
             'INSERT INTO body_records (user_id, record_date, weight_kg, notes) VALUES (?, ?, ?, ?)'
         )->execute([$demoUserId, date('Y-m-d'), 68.4, '初始體重']);
+        $pdo->prepare(
+            'UPDATE users SET profile_completed_at = CURRENT_TIMESTAMP WHERE user_id = ?'
+        )->execute([$demoUserId]);
     }
 }

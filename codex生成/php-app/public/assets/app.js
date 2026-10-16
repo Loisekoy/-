@@ -1,20 +1,34 @@
 const state = {
-    token: window.__FITTRACK_QA_TOKEN__ || null,
+    authenticated: false,
     me: null,
     reference: null,
     route: '',
     plans: [],
     selectedPlanId: null,
     selectedDayIndex: 0,
+    planCreationMode: 'computer',
+    exerciseOptions: [],
+    manualPlanDraft: null,
+    manualPlanDayIndex: 0,
+    manualExerciseQuery: '',
+    manualBodyPartId: '',
     exerciseFilters: { q: '', body_part_id: '', difficulty_level: '' },
+    exercisePage: 1,
+    dashboardFilters: { start_date: '', end_date: '' },
+    historyFilters: { start_date: '', end_date: '', status: '', exercise_id: '' },
+    historyDetailId: null,
     adminTab: 'users',
     adminSelectedTable: 'users',
+    adminEditingExerciseId: null,
     planEditing: false,
     activeWorkoutExerciseIndex: 0,
 };
 
 let restTimerId = null;
 let restTimerRemaining = 0;
+let restTimerState = 'idle';
+let workoutTimerId = null;
+let activeWorkoutSessionId = null;
 
 const main = document.querySelector('#main-content');
 const header = document.querySelector('#site-header');
@@ -51,6 +65,18 @@ const formatDateTime = (value) => {
     }).format(new Date(normalizeDateValue(value)));
 };
 
+const formatElapsedDuration = (seconds) => {
+    const total = Math.max(0, Math.floor(Number(seconds) || 0));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const remainingSeconds = total % 60;
+    return [hours, minutes, remainingSeconds].map((part) => String(part).padStart(2, '0')).join(':');
+};
+
+const exerciseImage = (url, name, lazy = false) => url
+    ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(name)} 動作示範" ${lazy ? 'loading="lazy"' : ''} data-exercise-image><span class="exercise-image-fallback" hidden>非此動作示範</span>`
+    : '<span class="exercise-image-fallback">非此動作示範</span>';
+
 function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `toast ${type === 'error' ? 'error' : ''}`;
@@ -64,10 +90,12 @@ async function api(path, options = {}) {
     if (options.body && !(options.body instanceof FormData)) {
         headers['Content-Type'] = 'application/json';
     }
-    if (state.token) {
-        headers.Authorization = `Bearer ${state.token}`;
+    const method = String(options.method || 'GET').toUpperCase();
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+        const csrf = document.cookie.split('; ').find((item) => item.startsWith('fittrack_csrf=') || item.startsWith('__Host-fittrack_csrf='));
+        if (csrf) headers['X-CSRF-Token'] = decodeURIComponent(csrf.split('=').slice(1).join('='));
     }
-    const response = await fetch(`/api${path}`, { ...options, headers });
+    const response = await fetch(`/api${path}`, { ...options, headers, credentials: 'same-origin' });
     let data = null;
     if (response.status !== 204) {
         data = await response.json().catch(() => ({
@@ -76,7 +104,7 @@ async function api(path, options = {}) {
         }));
     }
     if (!response.ok) {
-        if (response.status === 401 && state.token) {
+        if (response.status === 401 && state.authenticated) {
             clearSession();
             renderHeader();
             navigate('login');
@@ -87,14 +115,15 @@ async function api(path, options = {}) {
 }
 
 function setSession(result) {
-    state.token = result.access_token;
+    state.authenticated = true;
 }
 
 function clearSession() {
-    state.token = null;
+    state.authenticated = false;
     state.me = null;
     state.reference = null;
     state.plans = [];
+    resetWorkoutTimers();
 }
 
 function navigate(route) {
@@ -107,12 +136,12 @@ function navigate(route) {
 }
 
 function currentRoute() {
-    return location.hash.replace(/^#/, '') || (state.token ? 'dashboard' : 'home');
+    return location.hash.replace(/^#/, '') || (state.authenticated ? 'dashboard' : 'home');
 }
 
 function renderHeader() {
     const route = currentRoute();
-    if (!state.token) {
+    if (!state.authenticated) {
         header.innerHTML = `
             <div class="header-inner">
                 <button class="brand button-quiet" data-action="navigate" data-route="home" aria-label="回到首頁">
@@ -178,7 +207,7 @@ function renderLanding() {
                 </div>
             </div>
             <div class="hero-proof" aria-label="系統特色">
-                <div class="hero-proof-item"><strong>15 TABLES</strong><span>正規化 PostgreSQL 資料模型</span></div>
+                <div class="hero-proof-item"><strong>20 TABLES</strong><span>正規化 PostgreSQL 資料模型</span></div>
                 <div class="hero-proof-item"><strong>SET BY SET</strong><span>每完成一組立即寫入資料庫</span></div>
                 <div class="hero-proof-item"><strong>RULES V1</strong><span>可重現的規則式課表產生</span></div>
             </div>
@@ -205,7 +234,7 @@ function renderAuth(mode) {
                         </div>
                         <div class="field">
                             <label for="auth-password">密碼</label>
-                            <input id="auth-password" name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" minlength="10" maxlength="72" required value="${register ? '' : 'Demo12345'}">
+                            <input id="auth-password" name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" ${register ? 'minlength="10"' : ''} maxlength="72" required value="${register ? '' : 'Demo12345'}">
                         </div>
                         <button class="button button-primary" type="submit">${register ? '註冊並開始設定' : '登入系統'}</button>
                     </form>
@@ -215,7 +244,7 @@ function renderAuth(mode) {
                     </p>
                     <div class="demo-note">
                         示範會員：demo@fittrack.local / Demo12345<br>
-                        管理員：admin@fittrack.local / Admin12345
+                        你也可以免費註冊自己的帳號
                     </div>
                 </div>
             </div>
@@ -239,7 +268,9 @@ function statsStrip(items) {
 
 async function renderDashboard() {
     loading();
-    const data = await api('/dashboard');
+    const params = new URLSearchParams(Object.entries(state.dashboardFilters).filter(([, value]) => value));
+    const data = await api(`/dashboard?${params.toString()}`);
+    state.dashboardFilters = { start_date: data.start_date, end_date: data.end_date };
     const volumes = data.volume_by_week || [];
     const maxVolume = Math.max(1, ...volumes.map((item) => Number(item.volume)));
     const weights = data.weight_history || [];
@@ -252,20 +283,26 @@ async function renderDashboard() {
                 <div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">掌握訓練進度，持續成為更好的自己。</p></div>
                 <button class="button" data-action="navigate" data-route="workout">▶ 開始訓練</button>
             </div>
+            <form id="dashboard-filter-form" class="toolbar" aria-label="Dashboard 日期篩選">
+                <label>開始日期 <input name="start_date" type="date" min="1900-01-01" value="${escapeHtml(data.start_date)}" required></label>
+                <label>結束日期 <input name="end_date" type="date" min="1900-01-01" value="${escapeHtml(data.end_date)}" required></label>
+                <button class="button button-small" type="submit">套用日期</button>
+            </form>
             ${statsStrip([
                 { label: '完成訓練', value: formatNumber(data.session_count), unit: '次' },
                 { label: '完成工作組', value: formatNumber(data.set_count), unit: '組' },
-                { label: 'Training Volume', value: formatNumber(data.total_volume), unit: 'kg' },
+                { label: '外加重量訓練量', value: formatNumber(data.external_load_volume_kg_reps), unit: 'kg·次' },
+                { label: '徒手總次數', value: formatNumber(data.bodyweight_reps), unit: '次' },
                 { label: '最新體重', value: data.latest_weight ? formatNumber(data.latest_weight, 1) : '--', unit: 'kg' },
             ])}
             <div class="dashboard-grid">
                 <section class="data-section">
-                    <h2 class="section-heading">Training Volume</h2>
-                    <p class="section-copy">完成訓練的每週總量</p>
+                    <h2 class="section-heading">外加重量訓練量</h2>
+                    <p class="section-copy">Σ（外加重量 × 完成次數），純徒手組另以完成次數呈現</p>
                     ${volumes.length ? `
                         <div class="chart" aria-label="每週訓練量長條圖">
                             ${volumes.map((item) => `
-                                <div class="chart-column" title="${escapeHtml(item.week)}：${formatNumber(item.volume)} kg">
+                                <div class="chart-column" title="${escapeHtml(item.week)}：${formatNumber(item.volume)} kg·次／${formatNumber(item.session_count)} 次訓練">
                                     <div class="chart-bar" style="height:${Math.max(4, Number(item.volume) / maxVolume * 220)}px"></div>
                                     <span class="chart-label">${escapeHtml(item.week)}</span>
                                 </div>`).join('')}
@@ -304,20 +341,152 @@ function historyTable(items, compact = false) {
                 <td data-label="課表"><span class="exercise-name">${escapeHtml(item.day_title || item.plan_name || '自由訓練')}</span></td>
                 <td data-label="狀態"><span class="status status-${escapeHtml(item.status)}">${item.status === 'completed' ? '已完成' : '已取消'}</span></td>
                 <td data-label="工作組">${formatNumber(item.set_count)} 組</td>
-                <td data-label="總量">${formatNumber(item.total_volume)} kg</td>
-                ${compact ? '' : `<td data-label="操作"><button class="button button-small button-danger" data-action="delete-workout" data-session-id="${item.workout_session_id}">刪除</button></td>`}
+                <td data-label="總量">${formatNumber(item.total_volume)} kg·次</td>
+                ${compact ? '' : `<td data-label="操作"><div class="form-actions" style="margin-top:0"><button class="button button-small" data-action="view-workout" data-session-id="${item.workout_session_id}">查看</button><button class="button button-small button-danger" data-action="delete-workout" data-session-id="${item.workout_session_id}">刪除</button></div></td>`}
             </tr>`).join('')}</tbody>
     </table>`;
 }
 
+function manualPrescription() {
+    return {
+        Strength: [4, 5, 120],
+        'Fat Loss': [3, 12, 45],
+        'General Fitness': [2, 12, 45],
+    }[state.me?.goal_name] || [3, 10, 60];
+}
+
+function ensureManualPlanDraft() {
+    if (state.manualPlanDraft) return;
+    const dayCount = Math.max(2, Math.min(6, Number(state.me?.training_days_per_week || 3)));
+    state.manualPlanDraft = {
+        days: Array.from({ length: dayCount }, (_, index) => ({
+            day_title: `自訂訓練 ${index + 1}`,
+            exercises: [],
+        })),
+    };
+    state.manualPlanDayIndex = 0;
+}
+
+function syncManualDayTitle() {
+    const input = document.querySelector('#manual-day-title');
+    const day = state.manualPlanDraft?.days?.[state.manualPlanDayIndex];
+    if (input && day) day.day_title = input.value;
+}
+
+function manualPlanCompletion(days = state.manualPlanDraft?.days || []) {
+    const incomplete = days
+        .map((day, index) => ({
+            index,
+            missingTitle: !String(day?.day_title || '').trim(),
+            missingExercises: !Array.isArray(day?.exercises) || day.exercises.length === 0,
+        }))
+        .filter((day) => day.missingTitle || day.missingExercises);
+    return {
+        completedCount: days.length - incomplete.length,
+        incomplete,
+    };
+}
+
+function focusIncompleteManualDay(issue) {
+    state.manualPlanDayIndex = issue.index;
+    renderManualPlanBuilder();
+    const target = issue.missingTitle
+        ? document.querySelector('#manual-day-title')
+        : document.querySelector('#manual-exercise-search');
+    target?.focus({ preventScroll: true });
+    document.querySelector('#manual-plan-builder')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function manualPlannerMarkup() {
+    ensureManualPlanDraft();
+    const days = state.manualPlanDraft.days;
+    state.manualPlanDayIndex = Math.max(0, Math.min(state.manualPlanDayIndex, days.length - 1));
+    const day = days[state.manualPlanDayIndex];
+    const completion = manualPlanCompletion(days);
+    const incompleteDayNumbers = completion.incomplete.map((item) => `Day ${item.index + 1}`);
+    const selectedIds = new Set(day.exercises.map((item) => Number(item.exercise_id)));
+    const query = state.manualExerciseQuery.trim().toLocaleLowerCase('zh-TW');
+    const filtered = state.exerciseOptions.filter((exercise) => {
+        if (state.manualBodyPartId && String(exercise.body_part_id) !== String(state.manualBodyPartId)) return false;
+        if (!query) return true;
+        return [exercise.exercise_name, exercise.body_part_name, exercise.equipment]
+            .some((value) => String(value || '').toLocaleLowerCase('zh-TW').includes(query));
+    });
+    const visible = filtered.slice(0, 24);
+    return `
+        <section class="manual-plan-builder" aria-label="自己規劃課表">
+            <div class="manual-planner-heading">
+                <div><h2 class="section-heading zh">自己挑選訓練動作</h2><p class="section-copy">每一天可安排 1 至 10 個動作，組數、次數與休息時間都能自行調整。</p></div>
+                <label>訓練天數
+                    <select id="manual-day-count" aria-label="自訂課表訓練天數">
+                        ${[2, 3, 4, 5, 6].map((count) => `<option value="${count}" ${count === days.length ? 'selected' : ''}>${count} 天</option>`).join('')}
+                    </select>
+                </label>
+            </div>
+            <div class="manual-plan-progress ${completion.incomplete.length ? 'is-incomplete' : 'is-complete'}" role="status">
+                <strong>已完成 ${completion.completedCount} / ${days.length} 個訓練日</strong>
+                <span>${completion.incomplete.length
+                    ? `${incompleteDayNumbers.join('、')} 尚需要動作或名稱。每個訓練日都完成後才能建立課表；如果不需要 ${days.length} 天，請調整右上方的「訓練天數」。`
+                    : '所有訓練日都已安排完成，現在可以建立課表。'}</span>
+            </div>
+            <div class="manual-planner-layout">
+                <aside class="manual-day-tabs" aria-label="自訂課表訓練日">
+                    ${days.map((item, index) => {
+                        const isIncomplete = !item.day_title.trim() || item.exercises.length === 0;
+                        return `<button type="button" class="manual-day-tab ${index === state.manualPlanDayIndex ? 'is-active' : ''} ${isIncomplete ? 'is-incomplete' : 'is-complete'}" data-action="manual-select-day" data-index="${index}" ${isIncomplete ? 'aria-invalid="true"' : ''}><strong>Day ${index + 1}</strong><span>${isIncomplete ? '尚未安排完成' : `${item.exercises.length} 個動作 · 已完成`}</span></button>`;
+                    }).join('')}
+                </aside>
+                <div class="manual-day-editor">
+                    <label class="field">這一天的名稱<input id="manual-day-title" maxlength="100" value="${escapeHtml(day.day_title)}" aria-label="自訂訓練日名稱"></label>
+                    <div class="manual-selected-list">
+                        <div class="manual-section-title"><strong>已選動作</strong><span>${day.exercises.length} / 10</span></div>
+                        ${day.exercises.length ? day.exercises.map((item, index) => {
+                            const exercise = state.exerciseOptions.find((option) => Number(option.exercise_id) === Number(item.exercise_id));
+                            return `<article class="manual-selected-exercise" data-manual-index="${index}">
+                                <div class="manual-exercise-thumb">${exerciseImage(exercise?.image_url, exercise?.exercise_name || '動作', true)}</div>
+                                <div class="manual-exercise-copy"><strong>${escapeHtml(exercise?.exercise_name || `動作 #${item.exercise_id}`)}</strong><span>${escapeHtml(exercise?.body_part_name || '')} · ${escapeHtml(exercise?.equipment || 'Bodyweight')}</span></div>
+                                <label>組數<input class="manual-target-input" data-field="target_sets" type="number" min="1" max="10" value="${item.target_sets}"></label>
+                                <label>次數<input class="manual-target-input" data-field="target_reps" type="number" min="1" max="50" value="${item.target_reps}"></label>
+                                <label>休息<input class="manual-target-input" data-field="rest_seconds" type="number" min="0" max="600" step="5" value="${item.rest_seconds}"><small>秒</small></label>
+                                <div class="manual-order-actions"><button type="button" class="icon-button compact" data-action="manual-move-exercise" data-index="${index}" data-direction="-1" aria-label="上移動作" ${index === 0 ? 'disabled' : ''}>↑</button><button type="button" class="icon-button compact" data-action="manual-move-exercise" data-index="${index}" data-direction="1" aria-label="下移動作" ${index === day.exercises.length - 1 ? 'disabled' : ''}>↓</button><button type="button" class="icon-button compact danger" data-action="manual-remove-exercise" data-index="${index}" aria-label="移除動作">×</button></div>
+                            </article>`;
+                        }).join('') : '<div class="empty-state compact">還沒有選擇動作，請從下方動作庫加入。</div>'}
+                    </div>
+                    <div class="manual-picker">
+                        <div class="manual-section-title"><strong>從動作庫加入</strong><span>符合 ${formatNumber(filtered.length)} 個</span></div>
+                        <div class="manual-picker-filters">
+                            <input id="manual-exercise-search" type="search" maxlength="100" placeholder="搜尋動作、部位或器材" value="${escapeHtml(state.manualExerciseQuery)}">
+                            <select id="manual-body-part-filter" aria-label="自訂課表身體部位篩選"><option value="">全部部位</option>${state.reference.body_parts.map((part) => `<option value="${part.body_part_id}" ${String(part.body_part_id) === String(state.manualBodyPartId) ? 'selected' : ''}>${escapeHtml(part.body_part_name)}</option>`).join('')}</select>
+                            <button type="button" class="button button-small" data-action="manual-apply-filter">搜尋</button>
+                        </div>
+                        <div class="manual-exercise-results">
+                            ${visible.map((exercise) => `<article class="manual-exercise-option">
+                                <div class="manual-exercise-thumb">${exerciseImage(exercise.image_url, exercise.exercise_name, true)}</div>
+                                <div class="manual-exercise-copy"><strong>${escapeHtml(exercise.exercise_name)}</strong><span>${escapeHtml(exercise.body_part_name)} · ${escapeHtml(exercise.difficulty_level)} · ${escapeHtml(exercise.equipment || 'Bodyweight')}</span></div>
+                                <button type="button" class="button button-small ${selectedIds.has(Number(exercise.exercise_id)) ? '' : 'button-primary'}" data-action="manual-add-exercise" data-exercise-id="${exercise.exercise_id}" ${selectedIds.has(Number(exercise.exercise_id)) || day.exercises.length >= 10 ? 'disabled' : ''}>${selectedIds.has(Number(exercise.exercise_id)) ? '已加入' : '加入'}</button>
+                            </article>`).join('') || '<div class="empty-state compact">找不到符合條件的動作。</div>'}
+                        </div>
+                        ${filtered.length > visible.length ? `<p class="manual-result-note">目前顯示前 ${visible.length} 筆，請輸入更完整的關鍵字縮小範圍。</p>` : ''}
+                    </div>
+                </div>
+            </div>
+        </section>`;
+}
+
+function renderManualPlanBuilder() {
+    const container = document.querySelector('#manual-plan-builder');
+    if (container) container.innerHTML = manualPlannerMarkup();
+}
+
 async function renderPlans() {
     loading();
-    const [result, exerciseResult, aiStatus] = await Promise.all([
+    const [result, exerciseResult] = await Promise.all([
         api('/plans'),
-        api('/exercises'),
-        api('/ai/status'),
+        api('/exercises/options'),
     ]);
     state.plans = result.items || [];
+    state.exerciseOptions = exerciseResult.items || [];
+    if (state.planCreationMode === 'manual') ensureManualPlanDraft();
     if (!state.selectedPlanId && state.plans.length) {
         state.selectedPlanId = Number(state.plans[0].workout_plan_id);
     }
@@ -325,21 +494,21 @@ async function renderPlans() {
     const day = selected?.days?.[state.selectedDayIndex] || selected?.days?.[0];
     main.innerHTML = `
         <div class="page-shell">
-            <div class="page-header">
-                <div><h1 class="page-title zh">我的訓練課表</h1><p class="page-subtitle">依照目標、程度、偏好部位與可用時間產生課表。</p></div>
-                <form id="generate-plan-form" class="plan-create-form">
+            <div class="page-header"><div><h1 class="page-title zh">我的訓練課表</h1><p class="page-subtitle">可以自己挑動作安排，也可以交給電腦依你的目標與設定規劃。</p></div></div>
+            <form id="generate-plan-form" class="plan-create-form">
+                <div class="plan-create-row">
                     <input name="plan_name" maxlength="120" placeholder="新課表名稱（可留白）" aria-label="新課表名稱">
                     <select name="generation_mode" id="generation-mode" aria-label="課表產生方式">
-                        <option value="rules">規則式規劃</option>
-                        <option value="ai" ${aiStatus.enabled ? '' : 'disabled'}>AI 規劃${aiStatus.enabled ? '' : '（尚未設定）'}</option>
+                        <option value="computer" ${state.planCreationMode === 'computer' ? 'selected' : ''}>電腦規劃</option>
+                        <option value="manual" ${state.planCreationMode === 'manual' ? 'selected' : ''}>自己規劃</option>
                     </select>
-                    <textarea name="focus" id="ai-planning-focus" maxlength="600" rows="2" placeholder="AI 規劃需求，例如：希望加強胸背、避免高衝擊動作" aria-label="AI 規劃需求" hidden disabled></textarea>
-                    <button class="button button-primary" type="submit">新增規劃</button>
-                    <p class="plan-generator-status ${aiStatus.enabled ? 'is-ready' : ''}">${aiStatus.enabled
-                        ? `AI 已啟用 · ${escapeHtml(aiStatus.model || '')} · ${escapeHtml(aiStatus.endpoint_host || '')}`
-                        : 'AI 尚未設定，規則式課表仍可正常使用。'}</p>
-                </form>
-            </div>
+                    <button class="button button-primary" type="submit">${state.planCreationMode === 'manual' ? '建立我的課表' : '請電腦規劃'}</button>
+                </div>
+                <p class="plan-generator-status">${state.planCreationMode === 'manual'
+                    ? '由你決定每一天的動作、順序、組數、次數與休息時間。'
+                    : '電腦會依目標、程度、偏好部位與可用時間安排，並優先避開最近課表用過的動作。'}</p>
+                <div id="manual-plan-builder" ${state.planCreationMode === 'manual' ? '' : 'hidden'}>${state.planCreationMode === 'manual' ? manualPlannerMarkup() : ''}</div>
+            </form>
             ${state.plans.length > 1 ? `
                 <div class="toolbar" style="grid-template-columns:minmax(240px,420px)">
                     <select id="plan-select" aria-label="選擇課表">
@@ -371,6 +540,7 @@ async function renderPlans() {
                             <span>${escapeHtml(selected.goal_name)}</span>
                             <span>${escapeHtml(selected.duration_minutes)} 分鐘</span>
                             <span>${selected.days.length} 天計畫</span>
+                            <span>${selected.algorithm_version === 'manual-v1' ? '自己規劃' : '電腦規劃'}</span>
                         </div>
                         ${day ? `
                             <div class="plan-day-header">
@@ -382,9 +552,9 @@ async function renderPlans() {
                                 <tbody>${day.exercises.map((exercise) => `
                                     <tr class="plan-exercise-editor" data-plan-exercise-id="${exercise.plan_exercise_id}">
                                         <td data-label="#">${exercise.exercise_order}</td>
-                                        <td data-label="示意圖"><div class="plan-exercise-media">${exercise.image_url ? `<img src="${escapeHtml(exercise.image_url)}" alt="${escapeHtml(exercise.exercise_name)} 動作示範" loading="lazy">` : '<span>FIT</span>'}</div></td>
+                                        <td data-label="示意圖"><div class="plan-exercise-media">${exerciseImage(exercise.image_url, exercise.exercise_name, true)}</div></td>
                                         <td data-label="動作名稱">${state.planEditing
-                                            ? `<select class="plan-exercise-select" aria-label="第 ${exercise.exercise_order} 個動作">${(exerciseResult.items || []).map((option) => `<option value="${option.exercise_id}" ${Number(option.exercise_id) === Number(exercise.exercise_id) ? 'selected' : ''}>${escapeHtml(option.exercise_name)} · ${escapeHtml(option.body_part_name)}</option>`).join('')}</select>`
+                                            ? `<select class="plan-exercise-select" aria-label="第 ${exercise.exercise_order} 個動作">${state.exerciseOptions.map((option) => `<option value="${option.exercise_id}" ${Number(option.exercise_id) === Number(exercise.exercise_id) ? 'selected' : ''}>${escapeHtml(option.exercise_name)} · ${escapeHtml(option.body_part_name)}</option>`).join('')}</select>`
                                             : `<span class="exercise-name">${escapeHtml(exercise.exercise_name)}</span>`}</td>
                                         <td data-label="主要部位">${escapeHtml(exercise.body_part_name)}</td>
                                         <td data-label="器材">${escapeHtml(exercise.equipment || 'Bodyweight')}</td>
@@ -392,14 +562,14 @@ async function renderPlans() {
                                             ? `<div class="plan-number-pair"><input class="plan-sets" type="number" min="1" max="10" value="${exercise.target_sets}" aria-label="目標組數"><span>×</span><input class="plan-reps" type="number" min="1" max="50" value="${exercise.target_reps}" aria-label="目標次數"></div>`
                                             : `${exercise.target_sets} × ${exercise.target_reps}`}</td>
                                         <td data-label="休息">${state.planEditing
-                                            ? `<div class="plan-rest-input"><input class="plan-rest" type="number" min="0" max="300" step="5" value="${exercise.rest_seconds}" aria-label="休息秒數"><span>秒</span></div>`
+                                            ? `<div class="plan-rest-input"><input class="plan-rest" type="number" min="0" max="600" step="5" value="${exercise.rest_seconds}" aria-label="休息秒數"><span>秒</span></div>`
                                             : `${exercise.rest_seconds} 秒`}</td>
                                     </tr>`).join('')}</tbody>
                             </table></div>` : ''}
                     </section>
                 </div>` : `
                 <div class="empty-state">
-                    尚未建立課表。先在「編輯資料」完成基本資料、訓練設定與偏好部位，再產生第一份課表。
+                    尚未建立課表。先在「編輯資料」完成基本資料、訓練設定與偏好部位，再建立第一份課表。
                 </div>`}
         </div>`;
 }
@@ -408,6 +578,7 @@ async function renderWorkout() {
     loading();
     const session = await api('/workout-sessions/current');
     if (!session) {
+        resetWorkoutTimers();
         main.innerHTML = `
             <div class="workout-shell">
                 <div class="page-header"><div><h1 class="page-title zh">開始訓練</h1><p class="page-subtitle">目前沒有進行中的訓練。</p></div></div>
@@ -420,14 +591,19 @@ async function renderWorkout() {
 }
 
 function renderWorkoutSession(session) {
-    const savedKeys = new Set((session.sets || []).map((set) => `${set.exercise_id}-${set.set_number}`));
+    const sessionId = Number(session.workout_session_id);
+    if (activeWorkoutSessionId !== sessionId) {
+        resetRestTimer();
+        activeWorkoutSessionId = sessionId;
+    }
+    const savedKeys = new Set((session.sets || []).map((set) => `${set.workout_session_exercise_id}-${set.set_number}`));
     const savedCount = savedKeys.size;
     const targetCount = (session.exercises || []).reduce((sum, exercise) => sum + Number(exercise.target_sets), 0);
     const progress = targetCount ? Math.min(100, savedCount / targetCount * 100) : 0;
     const exercises = session.exercises || [];
     state.activeWorkoutExerciseIndex = Math.max(0, Math.min(state.activeWorkoutExerciseIndex, exercises.length - 1));
     const exercise = exercises[state.activeWorkoutExerciseIndex];
-    const exerciseSets = (session.sets || []).filter((set) => Number(set.exercise_id) === Number(exercise?.exercise_id));
+    const exerciseSets = (session.sets || []).filter((set) => Number(set.workout_session_exercise_id) === Number(exercise?.workout_session_exercise_id));
     main.innerHTML = `
         <div class="workout-shell">
             <div class="workout-topline">
@@ -435,24 +611,31 @@ function renderWorkoutSession(session) {
                     <h1 class="page-title zh">${escapeHtml(session.day_title || '進行中訓練')}</h1>
                     <p class="page-subtitle">${escapeHtml(session.plan_name || '')} · 開始於 ${formatDateTime(session.started_at)}</p>
                 </div>
-                <button class="icon-button" data-action="navigate" data-route="dashboard" title="離開訓練頁" aria-label="離開訓練頁">×</button>
+                <div class="workout-topline-actions">
+                    <div class="workout-total-timer" aria-label="總訓練時間">
+                        <span class="stat-label">總訓練時間</span>
+                        <strong id="workout-elapsed-time">00:00:00</strong>
+                    </div>
+                    <button class="icon-button" data-action="navigate" data-route="dashboard" title="離開訓練頁" aria-label="離開訓練頁">×</button>
+                </div>
             </div>
             <div class="workout-progress"><span>${savedCount} / ${targetCount} 組</span><div class="progress-track"><span style="width:${progress}%"></span></div><span>${Math.round(progress)}%</span></div>
             <div class="workout-stepper" aria-label="訓練動作進度">
                 ${exercises.map((item, index) => {
-                    const complete = (session.sets || []).filter((set) => Number(set.exercise_id) === Number(item.exercise_id)).length >= Number(item.target_sets);
+                    const complete = (session.sets || []).filter((set) => Number(set.workout_session_exercise_id) === Number(item.workout_session_exercise_id)).length >= Number(item.target_sets);
                     return `<button class="workout-step ${index === state.activeWorkoutExerciseIndex ? 'is-active' : ''} ${complete ? 'is-complete' : ''}" data-action="select-workout-exercise" data-index="${index}"><span>${index + 1}</span>${escapeHtml(item.exercise_name)}</button>`;
                 }).join('')}
             </div>
             ${exercise ? `
                     <section class="workout-exercise is-focused">
                         <div class="workout-media">
-                            ${exercise.image_url ? `<img src="${escapeHtml(exercise.image_url)}" alt="${escapeHtml(exercise.exercise_name)} 動作示範">` : '<div class="exercise-placeholder">FIT</div>'}
+                            ${exerciseImage(exercise.image_url, exercise.exercise_name)}
                         </div>
                         <div>
                             <span class="stat-label">${escapeHtml(exercise.body_part_name)} · ${escapeHtml(exercise.equipment || 'Bodyweight')}</span>
                             <h2>${escapeHtml(exercise.exercise_name)}</h2>
                             <p class="page-subtitle">目標 ${exercise.target_sets} × ${exercise.target_reps} · 休息 ${exercise.rest_seconds} 秒</p>
+                            <button class="button button-small" data-action="adjust-session-target" data-session-id="${session.workout_session_id}" data-session-exercise-id="${exercise.workout_session_exercise_id}" data-target-sets="${exercise.target_sets}" data-target-reps="${exercise.target_reps}" data-rest-seconds="${exercise.rest_seconds}" data-target-weight="${exercise.target_weight_kg ?? ''}">調整本次目標</button>
                             <details style="margin-top:14px"><summary class="text-link">查看動作步驟</summary><p class="exercise-description" style="display:block;min-height:0;-webkit-line-clamp:initial">${escapeHtml(exercise.description)}</p></details>
                             <div class="set-table">
                                 <div class="set-row set-row-head"><span>Set</span><span>Weight (kg)</span><span>Reps</span><span>狀態</span></div>
@@ -461,11 +644,11 @@ function renderWorkoutSession(session) {
                                     const saved = exerciseSets.find((set) => Number(set.set_number) === setNumber);
                                     return `<div class="set-row">
                                         <strong>${setNumber}</strong>
-                                        <input class="set-input" id="weight-${exercise.exercise_id}-${setNumber}" type="number" inputmode="decimal" min="0" max="999.99" step="0.5" value="${saved ? escapeHtml(saved.weight_kg) : '0'}" aria-label="第 ${setNumber} 組重量">
-                                        <input class="set-input" id="reps-${exercise.exercise_id}-${setNumber}" type="number" inputmode="numeric" min="1" max="999" value="${saved ? escapeHtml(saved.reps) : exercise.target_reps}" aria-label="第 ${setNumber} 組次數">
+                                        <input class="set-input" id="weight-${exercise.workout_session_exercise_id}-${setNumber}" type="number" inputmode="decimal" min="0" max="999.99" step="0.01" value="${saved ? escapeHtml(saved.weight_kg) : escapeHtml(exercise.target_weight_kg ?? '0')}" aria-label="第 ${setNumber} 組重量">
+                                        <input class="set-input" id="reps-${exercise.workout_session_exercise_id}-${setNumber}" type="number" inputmode="numeric" min="1" max="999" value="${saved ? escapeHtml(saved.reps) : exercise.target_reps}" aria-label="第 ${setNumber} 組次數">
                                         ${saved
-                                            ? `<div class="set-actions"><button class="icon-button compact" data-action="update-set" data-set-id="${saved.workout_set_id}" data-exercise-id="${exercise.exercise_id}" data-set-number="${setNumber}" title="更新此組" aria-label="更新此組">↻</button><button class="icon-button compact danger" data-action="delete-set" data-set-id="${saved.workout_set_id}" title="刪除此組" aria-label="刪除此組">×</button></div>`
-                                            : `<button class="button button-small" data-action="save-set" data-session-id="${session.workout_session_id}" data-exercise-id="${exercise.exercise_id}" data-set-number="${setNumber}" data-rest-seconds="${exercise.rest_seconds}">儲存此組</button>`}
+                                            ? `<div class="set-actions"><button class="icon-button compact" data-action="update-set" data-set-id="${saved.workout_set_id}" data-session-exercise-id="${exercise.workout_session_exercise_id}" data-set-number="${setNumber}" title="更新此組" aria-label="更新此組">↻</button><button class="icon-button compact danger" data-action="delete-set" data-set-id="${saved.workout_set_id}" title="刪除此組" aria-label="刪除此組">×</button></div>`
+                                            : `<button class="button button-small" data-action="save-set" data-session-id="${session.workout_session_id}" data-session-exercise-id="${exercise.workout_session_exercise_id}" data-set-number="${setNumber}" data-rest-seconds="${exercise.rest_seconds}">儲存此組</button>`}
                                     </div>`;
                                 }).join('')}
                             </div>
@@ -477,8 +660,8 @@ function renderWorkoutSession(session) {
                         <button class="button" data-action="select-workout-exercise" data-index="${state.activeWorkoutExerciseIndex + 1}" ${state.activeWorkoutExerciseIndex === exercises.length - 1 ? 'disabled' : ''}>下一個 →</button>
                     </div>` : '<div class="empty-state">這個訓練日沒有可用動作。</div>'}
             <aside class="rest-timer" id="rest-timer" aria-live="polite">
-                <div><span class="stat-label">REST TIMER</span><strong id="rest-countdown">${restTimerRemaining > 0 ? `${Math.floor(restTimerRemaining / 60)}:${String(restTimerRemaining % 60).padStart(2, '0')}` : '等待完成一組'}</strong></div>
-                <button class="button button-small" data-action="stop-rest-timer" ${restTimerRemaining <= 0 ? 'disabled' : ''}>略過休息</button>
+                <div><span class="stat-label">REST TIMER</span><strong id="rest-countdown">${restTimerText()}</strong></div>
+                <button class="button button-small" data-action="stop-rest-timer" ${restTimerState !== 'running' ? 'disabled' : ''}>略過休息</button>
             </aside>
             <div class="field workout-notes"><label for="workout-notes">本次訓練備註</label><textarea id="workout-notes" maxlength="1000" placeholder="記錄今天的狀態、疼痛或重量調整">${escapeHtml(session.notes || '')}</textarea></div>
             <div class="workout-actions">
@@ -486,11 +669,14 @@ function renderWorkoutSession(session) {
                 <button class="button button-primary" data-action="finish-workout" data-status="complete" data-session-id="${session.workout_session_id}" ${savedCount === 0 ? 'disabled' : ''}>完成訓練</button>
             </div>
         </div>`;
+    startWorkoutTimer(session.started_at);
+    updateRestTimerDisplay();
 }
 
 function startRestTimer(seconds) {
     window.clearInterval(restTimerId);
     restTimerRemaining = Math.max(0, Number(seconds));
+    restTimerState = restTimerRemaining > 0 ? 'running' : 'not-needed';
     updateRestTimerDisplay();
     if (restTimerRemaining <= 0) return;
     restTimerId = window.setInterval(() => {
@@ -499,55 +685,141 @@ function startRestTimer(seconds) {
         if (restTimerRemaining <= 0) {
             window.clearInterval(restTimerId);
             restTimerId = null;
+            restTimerState = 'finished';
+            updateRestTimerDisplay();
             showToast('休息完成，可以開始下一組。');
         }
     }, 1000);
 }
 
+function restTimerText() {
+    if (restTimerState === 'running') {
+        return `${Math.floor(restTimerRemaining / 60)}:${String(restTimerRemaining % 60).padStart(2, '0')}`;
+    }
+    if (restTimerState === 'finished') return '休息完成';
+    if (restTimerState === 'skipped') return '已略過休息';
+    if (restTimerState === 'not-needed') return '本組不需休息';
+    return '儲存一組後開始';
+}
+
 function updateRestTimerDisplay() {
     const display = document.querySelector('#rest-countdown');
-    if (display) {
-        display.textContent = restTimerRemaining > 0
-            ? `${Math.floor(restTimerRemaining / 60)}:${String(restTimerRemaining % 60).padStart(2, '0')}`
-            : '休息完成';
-    }
+    if (display) display.textContent = restTimerText();
     const stop = document.querySelector('[data-action="stop-rest-timer"]');
-    if (stop) stop.disabled = restTimerRemaining <= 0;
+    if (stop) stop.disabled = restTimerState !== 'running';
+}
+
+function resetRestTimer() {
+    window.clearInterval(restTimerId);
+    restTimerId = null;
+    restTimerRemaining = 0;
+    restTimerState = 'idle';
+    updateRestTimerDisplay();
+}
+
+function stopWorkoutTimer() {
+    window.clearInterval(workoutTimerId);
+    workoutTimerId = null;
+}
+
+function startWorkoutTimer(startedAt) {
+    stopWorkoutTimer();
+    const startedAtMs = new Date(normalizeDateValue(startedAt)).getTime();
+    const update = () => {
+        const display = document.querySelector('#workout-elapsed-time');
+        if (!display) return;
+        display.textContent = Number.isFinite(startedAtMs)
+            ? formatElapsedDuration((Date.now() - startedAtMs) / 1000)
+            : '--:--:--';
+    };
+    update();
+    workoutTimerId = window.setInterval(update, 1000);
+}
+
+function resetWorkoutTimers() {
+    resetRestTimer();
+    stopWorkoutTimer();
+    activeWorkoutSessionId = null;
 }
 
 async function renderExercises() {
     loading();
-    const params = new URLSearchParams(Object.entries(state.exerciseFilters).filter(([, value]) => value));
+    const params = new URLSearchParams(Object.entries({
+        ...state.exerciseFilters,
+        page: state.exercisePage,
+        page_size: 24,
+    }).filter(([, value]) => value));
     const result = await api(`/exercises?${params.toString()}`);
     const items = result.items || [];
+    const total = Number(result.total || 0);
+    const totalPages = Math.max(1, Math.ceil(total / Number(result.page_size || 24)));
+    if (state.exercisePage > totalPages) {
+        state.exercisePage = totalPages;
+        await renderExercises();
+        return;
+    }
     main.innerHTML = `
         <div class="page-shell">
-            <div class="page-header"><div><h1 class="page-title zh">動作資料庫</h1><p class="page-subtitle">搜尋動作、器材、難度與中文步驟，GIF 來自你提供的本機資料集。</p></div><span class="stat-label">${items.length} 個動作</span></div>
+            <div class="page-header"><div><h1 class="page-title zh">動作資料庫</h1><p class="page-subtitle">搜尋動作、器材、難度與中文步驟，GIF 來自你提供的本機資料集。</p></div><span class="stat-label">共 ${formatNumber(total)} 個動作</span></div>
             <form id="exercise-filter-form" class="toolbar">
-                <input name="q" type="search" placeholder="搜尋動作或器材" value="${escapeHtml(state.exerciseFilters.q)}">
+                <input name="q" type="search" maxlength="100" placeholder="搜尋動作名稱或身體部位" value="${escapeHtml(state.exerciseFilters.q)}">
                 <select name="body_part_id"><option value="">全部部位</option>${state.reference.body_parts.map((part) => `<option value="${part.body_part_id}" ${String(part.body_part_id) === String(state.exerciseFilters.body_part_id) ? 'selected' : ''}>${escapeHtml(part.body_part_name)}</option>`).join('')}</select>
                 <select name="difficulty_level"><option value="">全部難度</option>${['Beginner', 'Intermediate', 'Advanced'].map((level) => `<option ${level === state.exerciseFilters.difficulty_level ? 'selected' : ''}>${level}</option>`).join('')}</select>
             </form>
             ${items.length ? `<div class="exercise-grid">${items.map((exercise) => `
                 <article class="exercise-card">
-                    <div class="exercise-card-media">${exercise.image_url ? `<img src="${escapeHtml(exercise.image_url)}" alt="${escapeHtml(exercise.exercise_name)} 動作示範" loading="lazy">` : '<span class="exercise-placeholder">FIT</span>'}</div>
+                    <div class="exercise-card-media">${exerciseImage(exercise.image_url, exercise.exercise_name, true)}</div>
                     <div class="exercise-card-body">
                         <h3>${escapeHtml(exercise.exercise_name)}</h3>
                         <div class="exercise-meta"><span>${escapeHtml(exercise.body_part_name)}</span><span>${escapeHtml(exercise.difficulty_level)}</span><span>${escapeHtml(exercise.equipment || 'Bodyweight')}</span></div>
                         <p class="exercise-description">${escapeHtml(exercise.description)}</p>
                     </div>
                 </article>`).join('')}</div>` : '<div class="empty-state">沒有符合條件的動作。</div>'}
+            ${totalPages > 1 ? `<nav class="pagination" aria-label="動作分頁">
+                <button class="button button-small" data-action="exercise-page" data-page="${state.exercisePage - 1}" ${state.exercisePage <= 1 ? 'disabled' : ''}>← 上一頁</button>
+                <span>第 ${formatNumber(state.exercisePage)} / ${formatNumber(totalPages)} 頁</span>
+                <button class="button button-small" data-action="exercise-page" data-page="${state.exercisePage + 1}" ${state.exercisePage >= totalPages ? 'disabled' : ''}>下一頁 →</button>
+            </nav>` : ''}
         </div>`;
 }
 
 async function renderHistory() {
     loading();
-    const result = await api('/workout-sessions');
+    const params = new URLSearchParams(Object.entries(state.historyFilters).filter(([, value]) => value));
+    const [result, exercises] = await Promise.all([
+        api(`/workout-sessions?${params.toString()}`),
+        api('/exercises/options'),
+    ]);
+    state.historyFilters.start_date = result.start_date;
+    state.historyFilters.end_date = result.end_date;
+    const detail = state.historyDetailId ? await api(`/workout-sessions/${state.historyDetailId}`) : null;
     main.innerHTML = `
         <div class="page-shell">
             <div class="page-header"><div><h1 class="page-title zh">訓練歷史</h1><p class="page-subtitle">已完成與已取消的訓練都會保留，Dashboard 只統計已完成項目。</p></div></div>
+            <form id="history-filter-form" class="toolbar" aria-label="訓練歷史篩選">
+                <label>開始日期 <input name="start_date" type="date" min="1900-01-01" value="${escapeHtml(result.start_date)}" required></label>
+                <label>結束日期 <input name="end_date" type="date" min="1900-01-01" value="${escapeHtml(result.end_date)}" required></label>
+                <select name="status" aria-label="訓練狀態"><option value="">全部狀態</option><option value="completed" ${state.historyFilters.status === 'completed' ? 'selected' : ''}>已完成</option><option value="cancelled" ${state.historyFilters.status === 'cancelled' ? 'selected' : ''}>已取消</option></select>
+                <select name="exercise_id" aria-label="動作"><option value="">全部動作</option>${(exercises.items || []).map((item) => `<option value="${item.exercise_id}" ${String(item.exercise_id) === String(state.historyFilters.exercise_id) ? 'selected' : ''}>${escapeHtml(item.exercise_name)}</option>`).join('')}</select>
+                <button class="button button-small" type="submit">套用篩選</button>
+            </form>
             <section class="data-section" style="margin-top:32px">${historyTable(result.items || [])}</section>
+            ${detail ? renderWorkoutHistoryDetail(detail) : ''}
         </div>`;
+}
+
+function renderWorkoutHistoryDetail(session) {
+    return `<section class="data-section" style="margin-top:24px" aria-label="訓練歷史明細">
+        <div class="page-header"><div><h2 class="section-heading">${escapeHtml(session.day_title || session.plan_name || '訓練明細')}</h2><p class="section-copy">${formatDateTime(session.started_at)} · ${session.status === 'completed' ? '已完成' : '已取消'}</p></div><button class="button button-small" data-action="close-workout-detail">關閉明細</button></div>
+        ${(session.exercises || []).map((exercise) => {
+            const sets = (session.sets || []).filter((set) => Number(set.workout_session_exercise_id) === Number(exercise.workout_session_exercise_id));
+            return `<article class="settings-section" style="margin-top:16px">
+                <div class="exercise-meta"><strong>${escapeHtml(exercise.exercise_name)}</strong><span>${escapeHtml(exercise.body_part_name)}</span><span>V${exercise.version_no}</span></div>
+                <p>${escapeHtml(exercise.description)}</p>
+                ${sets.length ? `<div class="set-table">${sets.map((set) => `<div class="set-row"><strong>${set.set_number}</strong><input id="history-weight-${set.workout_set_id}" class="set-input" type="number" min="0" max="999.99" step="0.01" value="${escapeHtml(set.weight_kg)}" aria-label="第 ${set.set_number} 組重量"><input id="history-reps-${set.workout_set_id}" class="set-input" type="number" min="1" max="999" value="${set.reps}" aria-label="第 ${set.set_number} 組次數"><div class="set-actions"><button class="icon-button compact" data-action="update-history-set" data-set-id="${set.workout_set_id}" title="更新此組" aria-label="更新此組">↻</button><button class="icon-button compact danger" data-action="delete-history-set" data-set-id="${set.workout_set_id}" title="刪除此組" aria-label="刪除此組">×</button></div></div>`).join('')}</div>` : '<p class="empty-state">這個動作沒有已儲存組數。</p>'}
+            </article>`;
+        }).join('')}
+    </section>`;
 }
 
 async function renderProfile() {
@@ -594,8 +866,8 @@ async function renderProfile() {
                 <section class="settings-section full">
                     <h2 class="section-heading zh">體重紀錄</h2>
                     <form id="body-record-form" class="form-grid two-columns" style="margin-top:20px;max-width:680px">
-                        <div class="field"><label for="record-date">日期</label><input id="record-date" name="record_date" type="date" max="${new Date().toISOString().slice(0, 10)}" required></div>
-                        <div class="field"><label for="record-weight">體重 kg</label><input id="record-weight" name="weight_kg" type="number" min="20" max="500" step="0.1" required></div>
+                        <div class="field"><label for="record-date">日期</label><input id="record-date" name="record_date" type="date" min="1900-01-01" max="${new Date().toISOString().slice(0, 10)}" required></div>
+                        <div class="field"><label for="record-weight">體重 kg</label><input id="record-weight" name="weight_kg" type="number" min="20" max="500" step="0.01" required></div>
                         <div class="field" style="grid-column:1/-1"><label for="record-notes">備註</label><input id="record-notes" name="notes" maxlength="1000"></div>
                         <div class="form-actions" style="grid-column:1/-1"><button class="button" type="submit">新增體重紀錄</button></div>
                     </form>
@@ -652,21 +924,28 @@ async function renderAdmin() {
         }
         databaseTable = await api(`/admin/database/tables/${state.adminSelectedTable}`);
     }
+    const editingExercise = exercises.items.find((item) => Number(item.exercise_id) === Number(state.adminEditingExerciseId));
+    const exerciseForm = `<form id="admin-exercise-form" class="form-grid two-columns" data-exercise-id="${editingExercise?.exercise_id || ''}" style="margin-top:24px;padding-bottom:24px;border-bottom:1px solid var(--line)">
+            <div class="field"><label>動作名稱</label><input name="exercise_name" required maxlength="120" value="${escapeHtml(editingExercise?.exercise_name || '')}"></div>
+            <div class="field"><label>主要部位</label><select name="body_part_id" required ${editingExercise ? 'disabled' : ''}>${state.reference.body_parts.map((part) => `<option value="${part.body_part_id}" ${Number(part.body_part_id) === Number(editingExercise?.body_part_id) ? 'selected' : ''}>${escapeHtml(part.body_part_name)}</option>`).join('')}</select></div>
+            <div class="field"><label>難度</label><select name="difficulty_level">${['Beginner', 'Intermediate', 'Advanced'].map((level) => `<option ${level === editingExercise?.difficulty_level ? 'selected' : ''}>${level}</option>`).join('')}</select></div>
+            <div class="field"><label>器材</label><input name="equipment" maxlength="100" value="${escapeHtml(editingExercise?.equipment || '')}"></div>
+            <div class="field" style="grid-column:1/-1"><label>動作說明</label><textarea name="description" required maxlength="4000">${escapeHtml(editingExercise?.description || '')}</textarea></div>
+            <div class="field" style="grid-column:1/-1"><label>HTTPS 圖片或 GIF 網址</label><input name="image_url" maxlength="2048" placeholder="https://example.com/exercise.gif" value="${escapeHtml(editingExercise?.image_url || '')}"></div>
+            <div class="form-actions" style="grid-column:1/-1"><button class="button button-primary" type="submit">${editingExercise ? '建立新版內容' : '新增動作'}</button>${editingExercise ? '<button class="button" type="button" data-action="cancel-edit-exercise">取消編輯</button>' : ''}</div>
+        </form>`;
+    const referenceEditor = `<div class="reference-admin-grid">
+        ${[['training-goals', state.reference.training_goals, 'training_goal_id', 'goal_name'], ['body-parts', state.reference.body_parts, 'body_part_id', 'body_part_name']].map(([type, items, idKey, nameKey]) => `<section class="settings-section"><h2 class="section-heading">${type === 'training-goals' ? '訓練目標說明' : '身體部位說明'}</h2>${items.map((item) => `<form class="form-grid admin-reference-form" data-reference-type="${type}" data-reference-id="${item[idKey]}"><div class="field"><label>${escapeHtml(item[nameKey])}</label><textarea name="description" maxlength="1000">${escapeHtml(item.description || '')}</textarea></div><button class="button button-small" type="submit">儲存說明</button></form>`).join('')}</section>`).join('')}
+    </div>`;
     const content = state.adminTab === 'ai'
         ? renderAiSettings(aiStatus)
         : state.adminTab === 'database'
         ? renderDatabaseSystem(databaseOverview, databaseTable)
+        : state.adminTab === 'references'
+        ? referenceEditor
         : state.adminTab === 'exercises'
-        ? `<form id="admin-exercise-form" class="form-grid two-columns" style="margin-top:24px;padding-bottom:24px;border-bottom:1px solid var(--line)">
-                <div class="field"><label>動作名稱</label><input name="exercise_name" required maxlength="120"></div>
-                <div class="field"><label>主要部位</label><select name="body_part_id" required>${state.reference.body_parts.map((part) => `<option value="${part.body_part_id}">${escapeHtml(part.body_part_name)}</option>`).join('')}</select></div>
-                <div class="field"><label>難度</label><select name="difficulty_level">${['Beginner', 'Intermediate', 'Advanced'].map((level) => `<option>${level}</option>`).join('')}</select></div>
-                <div class="field"><label>器材</label><input name="equipment" maxlength="100"></div>
-                <div class="field" style="grid-column:1/-1"><label>動作說明</label><textarea name="description" required maxlength="4000"></textarea></div>
-                <div class="field" style="grid-column:1/-1"><label>圖片或 GIF 路徑</label><input name="image_url" maxlength="2048" placeholder="/media/exercises/example.gif"></div>
-                <div class="form-actions" style="grid-column:1/-1"><button class="button button-primary" type="submit">新增動作</button></div>
-            </form>
-            <table class="data-table responsive"><thead><tr><th>ID</th><th>動作</th><th>部位</th><th>難度</th><th>器材</th><th>狀態</th><th>操作</th></tr></thead><tbody>${exercises.items.map((item) => `<tr><td data-label="ID">${item.exercise_id}</td><td data-label="動作">${escapeHtml(item.exercise_name)}</td><td data-label="部位">${escapeHtml(item.body_part_name)}</td><td data-label="難度">${escapeHtml(item.difficulty_level)}</td><td data-label="器材">${escapeHtml(item.equipment || '-')}</td><td data-label="狀態"><span class="status status-${Number(item.is_active) ? 'active' : 'inactive'}">${Number(item.is_active) ? '啟用' : '停用'}</span></td><td data-label="操作"><div class="form-actions" style="margin-top:0"><button class="button button-small" data-action="toggle-exercise" data-exercise-id="${item.exercise_id}" data-active="${Number(item.is_active) ? 0 : 1}">${Number(item.is_active) ? '停用' : '啟用'}</button><button class="button button-small button-danger" data-action="delete-exercise" data-exercise-id="${item.exercise_id}">刪除</button></div></td></tr>`).join('')}</tbody></table>`
+        ? `${exerciseForm}
+            <table class="data-table responsive"><thead><tr><th>ID</th><th>動作</th><th>部位</th><th>難度</th><th>器材</th><th>狀態</th><th>操作</th></tr></thead><tbody>${exercises.items.map((item) => `<tr><td data-label="ID">${item.exercise_id}</td><td data-label="動作">${escapeHtml(item.exercise_name)}</td><td data-label="部位">${escapeHtml(item.body_part_name)}</td><td data-label="難度">${escapeHtml(item.difficulty_level)}</td><td data-label="器材">${escapeHtml(item.equipment || '-')}</td><td data-label="狀態"><span class="status status-${Number(item.is_active) ? 'active' : 'inactive'}">${Number(item.is_active) ? '啟用' : '停用'}</span></td><td data-label="操作"><div class="form-actions" style="margin-top:0"><button class="button button-small" data-action="edit-exercise" data-exercise-id="${item.exercise_id}">編輯</button>${Number(item.is_active) ? `<button class="button button-small button-danger" data-action="delete-exercise" data-exercise-id="${item.exercise_id}">停用</button>` : `<button class="button button-small" data-action="toggle-exercise" data-exercise-id="${item.exercise_id}" data-active="1">啟用</button>`}</div></td></tr>`).join('')}</tbody></table>`
         : `<table class="data-table responsive"><thead><tr><th>ID</th><th>姓名</th><th>Email</th><th>身份</th><th>帳號狀態</th><th>建立時間</th></tr></thead><tbody>${users.items.map((item) => `<tr><td data-label="ID">${item.user_id}</td><td data-label="姓名">${escapeHtml(item.name)}</td><td data-label="Email">${escapeHtml(item.email)}</td><td data-label="身份">${Number(item.is_admin) ? 'ADMIN' : 'USER'}</td><td data-label="狀態"><span class="status status-${Number(item.is_active) ? 'active' : 'inactive'}">${Number(item.is_active) ? '啟用' : '停用'}</span></td><td data-label="建立時間">${formatDateTime(item.created_at)}</td></tr>`).join('')}</tbody></table>`;
     main.innerHTML = `
         <div class="page-shell">
@@ -674,7 +953,7 @@ async function renderAdmin() {
             <div class="admin-grid">
                 ${Object.entries({ users: '會員', exercises: '動作', plans: '課表', completed_workouts: '完成訓練', sets: '訓練組數' }).map(([key, label]) => `<div class="admin-stat"><span class="stat-label">${label}</span><strong>${formatNumber(stats[key])}</strong></div>`).join('')}
             </div>
-            <div class="tabs"><button class="tab ${state.adminTab === 'users' ? 'is-active' : ''}" data-action="admin-tab" data-tab="users">會員清單</button><button class="tab ${state.adminTab === 'exercises' ? 'is-active' : ''}" data-action="admin-tab" data-tab="exercises">動作管理</button><button class="tab ${state.adminTab === 'database' ? 'is-active' : ''}" data-action="admin-tab" data-tab="database">資料庫系統</button><button class="tab ${state.adminTab === 'ai' ? 'is-active' : ''}" data-action="admin-tab" data-tab="ai">模型接口</button></div>
+            <div class="tabs"><button class="tab ${state.adminTab === 'users' ? 'is-active' : ''}" data-action="admin-tab" data-tab="users">會員清單</button><button class="tab ${state.adminTab === 'exercises' ? 'is-active' : ''}" data-action="admin-tab" data-tab="exercises">動作管理</button><button class="tab ${state.adminTab === 'references' ? 'is-active' : ''}" data-action="admin-tab" data-tab="references">參考資料</button><button class="tab ${state.adminTab === 'database' ? 'is-active' : ''}" data-action="admin-tab" data-tab="database">資料庫系統</button><button class="tab ${state.adminTab === 'ai' ? 'is-active' : ''}" data-action="admin-tab" data-tab="ai">模型接口</button></div>
             ${content}
         </div>`;
 }
@@ -746,7 +1025,7 @@ function formatDatabaseValue(value) {
 }
 
 async function ensureSessionData() {
-    if (!state.token) return;
+    if (!state.authenticated) return;
     if (state.me && state.reference) return;
     const [me, reference] = await Promise.all([api('/me'), api('/reference')]);
     state.me = me;
@@ -755,8 +1034,9 @@ async function ensureSessionData() {
 
 async function renderRoute() {
     state.route = currentRoute();
+    if (state.route !== 'workout') stopWorkoutTimer();
     try {
-        if (!state.token) {
+        if (!state.authenticated) {
             renderHeader();
             if (state.route === 'login' || state.route === 'register') {
                 renderAuth(state.route);
@@ -797,6 +1077,47 @@ document.addEventListener('click', async (event) => {
             navigate(control.dataset.route);
         } else if (action === 'refresh') {
             renderRoute();
+        } else if (action === 'manual-select-day') {
+            syncManualDayTitle();
+            state.manualPlanDayIndex = Number(control.dataset.index);
+            renderManualPlanBuilder();
+        } else if (action === 'manual-add-exercise') {
+            syncManualDayTitle();
+            const day = state.manualPlanDraft.days[state.manualPlanDayIndex];
+            const exerciseId = Number(control.dataset.exerciseId);
+            if (day.exercises.length >= 10) throw new Error('每個訓練日最多安排 10 個動作。');
+            if (!day.exercises.some((item) => Number(item.exercise_id) === exerciseId)) {
+                const [sets, reps, rest] = manualPrescription();
+                day.exercises.push({
+                    exercise_id: exerciseId,
+                    target_sets: sets,
+                    target_reps: reps,
+                    rest_seconds: rest,
+                });
+            }
+            renderManualPlanBuilder();
+        } else if (action === 'manual-remove-exercise') {
+            syncManualDayTitle();
+            state.manualPlanDraft.days[state.manualPlanDayIndex].exercises.splice(Number(control.dataset.index), 1);
+            renderManualPlanBuilder();
+        } else if (action === 'manual-move-exercise') {
+            syncManualDayTitle();
+            const exercises = state.manualPlanDraft.days[state.manualPlanDayIndex].exercises;
+            const from = Number(control.dataset.index);
+            const to = from + Number(control.dataset.direction);
+            if (to >= 0 && to < exercises.length) {
+                [exercises[from], exercises[to]] = [exercises[to], exercises[from]];
+            }
+            renderManualPlanBuilder();
+        } else if (action === 'manual-apply-filter') {
+            syncManualDayTitle();
+            state.manualExerciseQuery = document.querySelector('#manual-exercise-search')?.value || '';
+            state.manualBodyPartId = document.querySelector('#manual-body-part-filter')?.value || '';
+            renderManualPlanBuilder();
+        } else if (action === 'exercise-page') {
+            state.exercisePage = Number(control.dataset.page);
+            await renderExercises();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         } else if (action === 'logout') {
             await api('/auth/logout', { method: 'POST' });
             clearSession();
@@ -843,11 +1164,11 @@ document.addEventListener('click', async (event) => {
             state.selectedDayIndex = Number(control.dataset.index);
             await renderPlans();
         } else if (action === 'delete-plan') {
-            if (!window.confirm('確定刪除這份課表？已完成的訓練歷史會保留。')) return;
+            if (!window.confirm('確定封存這份課表？歷史訓練與場次快照會保留。')) return;
             await api(`/plans/${control.dataset.planId}`, { method: 'DELETE' });
             state.selectedPlanId = null;
             state.selectedDayIndex = 0;
-            showToast('課表已刪除，歷史訓練仍保留。');
+            showToast('課表已封存，歷史訓練仍保留。');
             await renderPlans();
         } else if (action === 'start-workout') {
             control.disabled = true;
@@ -855,6 +1176,7 @@ document.addEventListener('click', async (event) => {
                 method: 'POST',
                 body: JSON.stringify({ plan_day_id: Number(control.dataset.dayId) }),
             });
+            resetWorkoutTimers();
             state.activeWorkoutExerciseIndex = 0;
             navigate('workout');
         } else if (action === 'select-workout-exercise') {
@@ -863,27 +1185,45 @@ document.addEventListener('click', async (event) => {
         } else if (action === 'save-set') {
             control.disabled = true;
             control.textContent = '儲存中';
-            const exerciseId = Number(control.dataset.exerciseId);
+            const sessionExerciseId = Number(control.dataset.sessionExerciseId);
             const setNumber = Number(control.dataset.setNumber);
-            const weight = document.querySelector(`#weight-${exerciseId}-${setNumber}`).value;
-            const reps = document.querySelector(`#reps-${exerciseId}-${setNumber}`).value;
+            const weight = document.querySelector(`#weight-${sessionExerciseId}-${setNumber}`).value;
+            const reps = document.querySelector(`#reps-${sessionExerciseId}-${setNumber}`).value;
             await api(`/workout-sessions/${control.dataset.sessionId}/sets`, {
                 method: 'POST',
-                body: JSON.stringify({ exercise_id: exerciseId, set_number: setNumber, weight_kg: Number(weight), reps: Number(reps) }),
+                body: JSON.stringify({ workout_session_exercise_id: sessionExerciseId, set_number: setNumber, weight_kg: weight, reps: Number(reps) }),
             });
             showToast(`第 ${setNumber} 組已儲存。`);
             await renderWorkout();
             startRestTimer(Number(control.dataset.restSeconds));
         } else if (action === 'update-set') {
-            const exerciseId = Number(control.dataset.exerciseId);
+            const sessionExerciseId = Number(control.dataset.sessionExerciseId);
             const setNumber = Number(control.dataset.setNumber);
-            const weight = document.querySelector(`#weight-${exerciseId}-${setNumber}`).value;
-            const reps = document.querySelector(`#reps-${exerciseId}-${setNumber}`).value;
+            const weight = document.querySelector(`#weight-${sessionExerciseId}-${setNumber}`).value;
+            const reps = document.querySelector(`#reps-${sessionExerciseId}-${setNumber}`).value;
             await api(`/workout-sets/${control.dataset.setId}`, {
                 method: 'PATCH',
-                body: JSON.stringify({ weight_kg: Number(weight), reps: Number(reps) }),
+                body: JSON.stringify({ weight_kg: weight, reps: Number(reps) }),
             });
             showToast(`第 ${setNumber} 組已更新。`);
+            await renderWorkout();
+        } else if (action === 'adjust-session-target') {
+            const sets = window.prompt('本次目標組數（不可低於已完成組數）', control.dataset.targetSets);
+            if (sets === null) return;
+            const reps = window.prompt('本次每組目標次數', control.dataset.targetReps);
+            if (reps === null) return;
+            const weight = window.prompt('本次目標外加重量（kg，可填 0）', control.dataset.targetWeight || '0');
+            if (weight === null) return;
+            await api(`/workout-sessions/${control.dataset.sessionId}/exercises/${control.dataset.sessionExerciseId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    target_sets: Number(sets),
+                    target_reps: Number(reps),
+                    rest_seconds: Number(control.dataset.restSeconds),
+                    target_weight_kg: weight,
+                }),
+            });
+            showToast('已調整本次運動目標，不會修改原課表。');
             await renderWorkout();
         } else if (action === 'delete-set') {
             if (!window.confirm('確定刪除這一組紀錄？')) return;
@@ -894,6 +1234,7 @@ document.addEventListener('click', async (event) => {
             window.clearInterval(restTimerId);
             restTimerId = null;
             restTimerRemaining = 0;
+            restTimerState = 'skipped';
             updateRestTimerDisplay();
         } else if (action === 'finish-workout') {
             const finishing = control.dataset.status === 'complete';
@@ -902,15 +1243,35 @@ document.addEventListener('click', async (event) => {
                 method: 'POST',
                 body: JSON.stringify({ notes: document.querySelector('#workout-notes')?.value || '' }),
             });
-            window.clearInterval(restTimerId);
-            restTimerId = null;
-            restTimerRemaining = 0;
+            resetWorkoutTimers();
             showToast(finishing ? '訓練已完成並納入統計。' : '本次訓練已取消。');
             navigate(finishing ? 'dashboard' : 'history');
         } else if (action === 'delete-workout') {
             if (!window.confirm('確定刪除這次訓練與所有組數？')) return;
             await api(`/workout-sessions/${control.dataset.sessionId}`, { method: 'DELETE' });
             showToast('訓練紀錄已刪除。');
+            await renderHistory();
+        } else if (action === 'view-workout') {
+            state.historyDetailId = Number(control.dataset.sessionId);
+            await renderHistory();
+        } else if (action === 'close-workout-detail') {
+            state.historyDetailId = null;
+            await renderHistory();
+        } else if (action === 'update-history-set') {
+            const setId = Number(control.dataset.setId);
+            await api(`/workout-sets/${setId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    weight_kg: document.querySelector(`#history-weight-${setId}`).value,
+                    reps: Number(document.querySelector(`#history-reps-${setId}`).value),
+                }),
+            });
+            showToast('歷史組數已更新。');
+            await renderHistory();
+        } else if (action === 'delete-history-set') {
+            if (!window.confirm('確定刪除這一組紀錄？完成場次至少須保留一組。')) return;
+            await api(`/workout-sets/${control.dataset.setId}`, { method: 'DELETE' });
+            showToast('歷史組數已刪除。');
             await renderHistory();
         } else if (action === 'edit-body-record') {
             const weight = window.prompt('輸入新的體重（kg）', control.dataset.weight);
@@ -934,6 +1295,7 @@ document.addEventListener('click', async (event) => {
             await renderBodyRecordList();
         } else if (action === 'admin-tab') {
             state.adminTab = control.dataset.tab;
+            state.adminEditingExerciseId = null;
             await renderAdmin();
         } else if (action === 'select-database-table') {
             state.adminSelectedTable = control.dataset.table;
@@ -945,14 +1307,22 @@ document.addEventListener('click', async (event) => {
             });
             showToast('動作狀態已更新。');
             await renderAdmin();
+        } else if (action === 'edit-exercise') {
+            state.adminEditingExerciseId = Number(control.dataset.exerciseId);
+            await renderAdmin();
+            document.querySelector('#admin-exercise-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else if (action === 'cancel-edit-exercise') {
+            state.adminEditingExerciseId = null;
+            await renderAdmin();
         } else if (action === 'delete-exercise') {
-            if (!window.confirm('確定刪除這個動作？若已被課表或歷史引用，系統會拒絕刪除。')) return;
+            if (!window.confirm('確定停用這個動作？既有課表與歷史版本會完整保留。')) return;
             await api(`/admin/exercises/${control.dataset.exerciseId}`, { method: 'DELETE' });
-            showToast('動作已刪除。');
+            showToast('動作已停用；舊課表與歷史版本仍保留。');
             await renderAdmin();
         }
     } catch (error) {
         control.disabled = false;
+        if (action === 'save-set') control.textContent = '尚未儲存，重試';
         showToast(error.message, 'error');
     }
 });
@@ -964,11 +1334,40 @@ document.addEventListener('change', async (event) => {
         state.planEditing = false;
         await renderPlans();
     } else if (event.target.matches('#generation-mode')) {
-        const focus = document.querySelector('#ai-planning-focus');
-        const isAi = event.target.value === 'ai';
-        focus.hidden = !isAi;
-        focus.disabled = !isAi;
-        if (isAi) focus.focus();
+        state.planCreationMode = event.target.value;
+        if (state.planCreationMode === 'manual') ensureManualPlanDraft();
+        await renderPlans();
+    } else if (event.target.matches('#manual-day-count')) {
+        syncManualDayTitle();
+        const nextCount = Number(event.target.value);
+        const days = state.manualPlanDraft.days;
+        if (nextCount < days.length) {
+            const removedHaveExercises = days.slice(nextCount).some((day) => day.exercises.length > 0);
+            if (removedHaveExercises && !window.confirm('減少天數會移除後面訓練日已選的動作，確定繼續？')) {
+                event.target.value = String(days.length);
+                return;
+            }
+            days.splice(nextCount);
+        } else {
+            while (days.length < nextCount) {
+                days.push({ day_title: `自訂訓練 ${days.length + 1}`, exercises: [] });
+            }
+        }
+        state.manualPlanDayIndex = Math.min(state.manualPlanDayIndex, nextCount - 1);
+        renderManualPlanBuilder();
+    }
+});
+
+document.addEventListener('input', (event) => {
+    if (event.target.matches('#manual-day-title')) {
+        const day = state.manualPlanDraft?.days?.[state.manualPlanDayIndex];
+        if (day) day.day_title = event.target.value;
+        return;
+    }
+    if (event.target.matches('.manual-target-input')) {
+        const row = event.target.closest('[data-manual-index]');
+        const item = state.manualPlanDraft?.days?.[state.manualPlanDayIndex]?.exercises?.[Number(row?.dataset.manualIndex)];
+        if (item) item[event.target.dataset.field] = Number(event.target.value);
     }
 });
 
@@ -992,20 +1391,48 @@ document.addEventListener('submit', async (event) => {
             navigate(state.me.profile_complete ? 'dashboard' : 'profile');
         } else if (form.id === 'exercise-filter-form') {
             state.exerciseFilters = values;
+            state.exercisePage = 1;
             await renderExercises();
+        } else if (form.id === 'dashboard-filter-form') {
+            state.dashboardFilters = values;
+            await renderDashboard();
+        } else if (form.id === 'history-filter-form') {
+            state.historyFilters = values;
+            state.historyDetailId = null;
+            await renderHistory();
         } else if (form.id === 'generate-plan-form') {
-            const isAi = values.generation_mode === 'ai';
-            const plan = await api(isAi ? '/plans/ai-generate' : '/plans/generate', {
-                method: 'POST',
-                body: JSON.stringify({
-                    plan_name: values.plan_name || null,
-                    focus: isAi ? values.focus || null : null,
-                }),
-            });
+            const manual = values.generation_mode === 'manual';
+            let plan;
+            if (manual) {
+                syncManualDayTitle();
+                const days = state.manualPlanDraft?.days || [];
+                const issue = manualPlanCompletion(days).incomplete[0];
+                if (issue) {
+                    focusIncompleteManualDay(issue);
+                    const missing = [
+                        issue.missingTitle ? '訓練日名稱' : '',
+                        issue.missingExercises ? '至少 1 個動作' : '',
+                    ].filter(Boolean).join('與');
+                    throw new Error(`Day ${issue.index + 1} 尚缺${missing}。你目前選擇 ${days.length} 個訓練日，請完成每一天，或調整「訓練天數」。`);
+                }
+                plan = await api('/plans/manual', {
+                    method: 'POST',
+                    body: JSON.stringify({ plan_name: values.plan_name || null, days }),
+                });
+                state.manualPlanDraft = null;
+                state.manualPlanDayIndex = 0;
+                state.manualExerciseQuery = '';
+                state.manualBodyPartId = '';
+            } else {
+                plan = await api('/plans/generate', {
+                    method: 'POST',
+                    body: JSON.stringify({ plan_name: values.plan_name || null }),
+                });
+            }
             state.selectedPlanId = Number(plan.workout_plan_id);
             state.selectedDayIndex = 0;
             state.planEditing = false;
-            showToast(isAi ? 'AI 訓練規劃已建立。' : '新的規則式訓練規劃已建立。');
+            showToast(manual ? '你的自訂課表已建立。' : '電腦已建立一份不同組合的訓練課表。');
             await renderPlans();
         } else if (form.id === 'profile-form') {
             state.me = await api('/me/profile', { method: 'PUT', body: JSON.stringify(values) });
@@ -1043,15 +1470,23 @@ document.addEventListener('submit', async (event) => {
             showToast('帳號已停用。');
             navigate('home');
         } else if (form.id === 'admin-exercise-form') {
-            await api('/admin/exercises', {
-                method: 'POST',
-                body: JSON.stringify({
-                    ...values,
-                    body_part_id: Number(values.body_part_id),
-                    is_active: true,
-                }),
+            const exerciseId = Number(form.dataset.exerciseId || 0);
+            const payload = { ...values };
+            if (!exerciseId) payload.body_part_id = Number(values.body_part_id);
+            await api(exerciseId ? `/admin/exercises/${exerciseId}` : '/admin/exercises', {
+                method: exerciseId ? 'PATCH' : 'POST',
+                body: JSON.stringify(payload),
             });
-            showToast('新動作已加入資料庫。');
+            showToast(exerciseId ? '動作已建立新的不可變版本。' : '新動作已加入資料庫。');
+            state.adminEditingExerciseId = null;
+            await renderAdmin();
+        } else if (form.matches('.admin-reference-form')) {
+            await api(`/admin/${form.dataset.referenceType}/${form.dataset.referenceId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ description: values.description || '' }),
+            });
+            state.reference = await api('/reference');
+            showToast('參考資料說明已儲存。');
             await renderAdmin();
         }
     } catch (error) {
@@ -1062,4 +1497,25 @@ document.addEventListener('submit', async (event) => {
 });
 
 window.addEventListener('hashchange', renderRoute);
-renderRoute();
+
+document.addEventListener('error', (event) => {
+    const image = event.target;
+    if (!(image instanceof HTMLImageElement) || !image.matches('[data-exercise-image]')) return;
+    image.hidden = true;
+    const fallback = image.nextElementSibling;
+    if (fallback?.classList.contains('exercise-image-fallback')) fallback.hidden = false;
+}, true);
+
+async function initializeApplication() {
+    try {
+        const session = await api('/auth/session');
+        state.authenticated = true;
+        state.me = session;
+    } catch (error) {
+        state.authenticated = false;
+        state.me = null;
+    }
+    await renderRoute();
+}
+
+initializeApplication();

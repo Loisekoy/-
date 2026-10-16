@@ -55,6 +55,7 @@ final class AiPlanGenerator
                 'age' => (int) $user['age'],
                 'gender' => $user['gender'],
                 'height_cm' => (float) $user['height_cm'],
+                'weight_kg' => (float) $user['weight_kg_snapshot'],
                 'training_experience' => $user['training_experience'],
                 'training_goal' => $user['goal_name'],
                 'training_days_per_week' => $days,
@@ -100,11 +101,22 @@ final class AiPlanGenerator
         $user = $statement->fetch();
         $required = [
             'age', 'height_cm', 'training_experience', 'training_goal_id',
-            'training_days_per_week', 'training_duration_minutes',
+            'training_days_per_week', 'training_duration_minutes', 'profile_completed_at',
         ];
         if (!$user || array_filter($required, static fn (string $key): bool => empty($user[$key]))) {
             throw new ApiException(422, 'PROFILE_INCOMPLETE', '請先完成個人資料與訓練設定。');
         }
+        $weightStatement = $pdo->prepare(
+            'SELECT weight_kg, record_date FROM body_records WHERE user_id = ? '
+            . 'ORDER BY record_date DESC, body_record_id DESC LIMIT 1'
+        );
+        $weightStatement->execute([$userId]);
+        $weightSnapshot = $weightStatement->fetch();
+        if (!$weightSnapshot) {
+            throw new ApiException(422, 'WEIGHT_REQUIRED', '目前沒有有效體重，請先補填體重。');
+        }
+        $user['weight_kg_snapshot'] = $weightSnapshot['weight_kg'];
+        $user['weight_record_date'] = $weightSnapshot['record_date'];
 
         $preferenceStatement = $pdo->prepare(
             'SELECT bp.body_part_name FROM user_body_parts ubp '
@@ -119,9 +131,12 @@ final class AiPlanGenerator
 
         $rank = ['Beginner' => 1, 'Intermediate' => 2, 'Advanced' => 3][(string) $user['training_experience']] ?? 1;
         $exerciseStatement = $pdo->prepare(
-            'SELECT e.exercise_id, e.exercise_name, e.difficulty_level, e.equipment, bp.body_part_name '
-            . 'FROM exercises e JOIN body_parts bp ON bp.body_part_id = e.body_part_id '
-            . "WHERE e.is_active = TRUE AND CASE e.difficulty_level "
+            'SELECT e.exercise_id, ev.exercise_version_id, ev.exercise_name, ev.difficulty_level, ev.equipment, bp.body_part_name '
+            . 'FROM exercises e JOIN exercise_versions ev ON ev.exercise_id = e.exercise_id '
+            . 'JOIN body_parts bp ON bp.body_part_id = e.body_part_id '
+            . 'WHERE e.is_active = TRUE AND ev.version_no = '
+            . '(SELECT MAX(v2.version_no) FROM exercise_versions v2 WHERE v2.exercise_id = e.exercise_id) '
+            . "AND CASE ev.difficulty_level "
             . "WHEN 'Beginner' THEN 1 WHEN 'Intermediate' THEN 2 ELSE 3 END <= ? "
             . 'ORDER BY bp.body_part_id, e.exercise_id'
         );
@@ -226,10 +241,10 @@ final class AiPlanGenerator
             throw new ApiException(502, 'AI_PLAN_INVALID', '模型回傳的課表名稱不符合格式。');
         }
 
-        $allowedIds = array_fill_keys(array_map(
-            static fn (array $exercise): int => (int) $exercise['exercise_id'],
-            $allowedExercises
-        ), true);
+        $allowedIds = [];
+        foreach ($allowedExercises as $exercise) {
+            $allowedIds[(int) $exercise['exercise_id']] = (int) $exercise['exercise_version_id'];
+        }
         $validatedDays = [];
         foreach ($days as $dayIndex => $day) {
             if (!is_array($day)) {
@@ -257,30 +272,42 @@ final class AiPlanGenerator
                     throw new ApiException(502, 'AI_PLAN_INVALID', '模型課表包含無效或重複的動作資料。');
                 }
                 $seen[$exerciseId] = true;
-                $validatedItems[] = [$exerciseId, $sets, $reps, $rest];
+                $validatedItems[] = [$allowedIds[$exerciseId], $sets, $reps, $rest];
             }
             $validatedDays[] = [$dayIndex + 1, $title, $validatedItems];
         }
 
-        $pdo->beginTransaction();
+        Database::beginTransaction($pdo);
         try {
             $planId = Database::insert(
                 $pdo,
-                'INSERT INTO workout_plans '
-                . '(user_id, plan_name, training_goal_id, experience_snapshot, duration_minutes) '
-                . 'VALUES (?, ?, ?, ?, ?)',
-                [
-                    $userId,
-                    $planName,
-                    (int) $user['training_goal_id'],
-                    $user['training_experience'],
-                    (int) $user['training_duration_minutes'],
-                ],
+                'INSERT INTO workout_plans (user_id, plan_name) VALUES (?, ?)',
+                [$userId, $planName],
                 'workout_plan_id'
             );
+            $pdo->prepare(
+                'INSERT INTO planning_profiles '
+                . '(workout_plan_id, training_goal_id, age_snapshot, height_cm_snapshot, weight_kg_snapshot, '
+                . 'weight_record_date, experience_snapshot, training_days_per_week, duration_minutes, algorithm_version) '
+                . "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'llm-validated-v1')"
+            )->execute([
+                $planId,
+                (int) $user['training_goal_id'],
+                (int) $user['age'],
+                (float) $user['height_cm'],
+                (float) $user['weight_kg_snapshot'],
+                (string) $user['weight_record_date'],
+                (string) $user['training_experience'],
+                (int) $user['training_days_per_week'],
+                (int) $user['training_duration_minutes'],
+            ]);
+            $pdo->prepare(
+                'INSERT INTO planning_profile_body_parts (workout_plan_id, body_part_id, priority) '
+                . 'SELECT ?, body_part_id, priority FROM user_body_parts WHERE user_id = ?'
+            )->execute([$planId, $userId]);
             $insertExercise = $pdo->prepare(
                 'INSERT INTO plan_exercises '
-                . '(plan_day_id, exercise_id, exercise_order, target_sets, target_reps, rest_seconds) '
+                . '(plan_day_id, exercise_version_id, exercise_order, target_sets, target_reps, rest_seconds) '
                 . 'VALUES (?, ?, ?, ?, ?, ?)'
             );
             foreach ($validatedDays as [$dayNumber, $title, $items]) {
@@ -290,10 +317,10 @@ final class AiPlanGenerator
                     [$planId, $dayNumber, '第 ' . $dayNumber . ' 天：' . $title],
                     'plan_day_id'
                 );
-                foreach ($items as $exerciseIndex => [$exerciseId, $sets, $reps, $rest]) {
+                foreach ($items as $exerciseIndex => [$exerciseVersionId, $sets, $reps, $rest]) {
                     $insertExercise->execute([
                         $planDayId,
-                        $exerciseId,
+                        $exerciseVersionId,
                         $exerciseIndex + 1,
                         $sets,
                         $reps,

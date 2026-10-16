@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+.DS_Store
+storage/*.db
+storage/*.sqlite
+storage/*.sqlite3
+storage/*.log
+storage/backups/
+tests/
