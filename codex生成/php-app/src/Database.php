@@ -26,7 +26,22 @@ final class Database
             }
             $port = $parts['port'] ?? 5432;
             $database = ltrim($parts['path'], '/');
-            $dsn = "pgsql:host={$parts['host']};port={$port};dbname={$database}";
+            parse_str($parts['query'] ?? '', $query);
+            $sslMode = (string) ($query['sslmode'] ?? (Config::isProduction() ? 'require' : 'prefer'));
+            $allowedSslModes = ['disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full'];
+            if (!in_array($sslMode, $allowedSslModes, true)) {
+                throw new RuntimeException('DATABASE_URL 的 sslmode 不受支援。');
+            }
+            if (Config::isProduction() && in_array($sslMode, ['disable', 'allow', 'prefer'], true)) {
+                throw new RuntimeException('正式環境 PostgreSQL 連線必須使用 TLS (sslmode=require 或更高)。');
+            }
+            $dsn = sprintf(
+                'pgsql:host=%s;port=%d;dbname=%s;sslmode=%s',
+                $parts['host'],
+                $port,
+                $database,
+                $sslMode
+            );
             self::$pdo = new PDO(
                 $dsn,
                 urldecode($parts['user'] ?? ''),

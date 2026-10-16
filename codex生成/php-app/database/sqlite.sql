@@ -102,7 +102,7 @@ CREATE TABLE planning_profiles (
     experience_snapshot TEXT NOT NULL CHECK (experience_snapshot IN ('Beginner', 'Intermediate', 'Advanced')),
     training_days_per_week INTEGER NOT NULL CHECK (training_days_per_week BETWEEN 2 AND 6),
     duration_minutes INTEGER NOT NULL CHECK (duration_minutes IN (30, 60, 90)),
-    algorithm_version TEXT NOT NULL DEFAULT 'rules-v1',
+    algorithm_version TEXT NOT NULL DEFAULT 'rules-v2-randomized',
     captured_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE planning_profile_body_parts (

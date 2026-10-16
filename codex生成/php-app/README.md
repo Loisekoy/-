@@ -87,25 +87,40 @@ Migration 檔案為 `database/migrations/20261006_teacher_review_v1_1.sql`。正
 
 ## 過期資料清理
 
-`bin/cleanup-expired.php` 每批最多刪除 500 筆過期 `user_sessions`，並清理超過 15 分鐘的 `login_failures`。`render.yaml` 排定每日台北時間 03:00（UTC 19:00）執行；若使用 Render，Cron Service 需 Starter 或當時平台支援的付費方案。
+`bin/cleanup-expired.php` 每批最多刪除 500 筆過期 `user_sessions`，並清理超過 15 分鐘的 `login_failures`。正式環境由 GitHub Actions 的 `.github/workflows/fittrack-maintenance.yml` 每日台北時間 03:17 執行，不需另外購買 Render Cron Service。排程日誌只記錄刪除筆數、執行時間與時區，不輸出 Token、雜湊或連線字串。
+
+## 每日備份與還原驗證
+
+同一個 GitHub Actions 排程會完成下列步驟：
+
+1. 使用 `pg_dump` 產生 PostgreSQL custom-format 備份。
+2. 還原到獨立 PostgreSQL 16 測試庫，核對 20 張表、25 條外鍵、Schema 版本與每表筆數。
+3. 使用 `docs/validation/media-sha256.txt` 核對 2,648 個 JPG/GIF 檔案。圖片本體由 Git 的不可覆寫 commit 保留，每份資料庫備份同時收入對應 SHA-256 清單。
+4. 將資料庫、筆數 Manifest 與媒體雜湊清單以 AES-256-CBC + PBKDF2 加密，再上傳為保留 7 天的 Workflow Artifact。公開儲存庫不會上傳明文資料庫。
+
+排程需在 GitHub 設定兩個 Repository Secrets：`FITTRACK_DATABASE_URL`與至少 32 字元的 `FITTRACK_BACKUP_KEY`。排程檔必須存在預設分支；公開儲存庫 60 天沒有任何活動時，GitHub 可能自動停用排程，驗收前應於 Actions 頁面確認最近一次執行成功。
 
 ## 測試
 
 ```bash
 php tests/smoke.php
 php tests/sqlite_migration.php
+php tests/cleanup_expired.php
+php bin/verify-media-manifest.php
 python3 tests/schema_consistency.py
 DATABASE_URL='postgresql://.../fittrack_test' FITTRACK_TEST_DATABASE=1 php tests/postgres_integrity.php
 ```
 
 - `smoke.php`：在暫存 SQLite 驗證完整功能流程。
+- `cleanup_expired.php`：建立 501 筆過期 Session 驗證分批清理、有效資料保留與無機密日誌。
+- `verify-media-manifest.php`：比對 2,648 個動作媒體的 SHA-256。
 - `schema_consistency.py`：比對 `postgres.sql` 與 `docs/schema_manifest.json`。
 - `postgres_integrity.php`：只允許在名稱含 `fittrack_` 的隔離測試庫執行，驗證 PostgreSQL Trigger、Constraint 與兩個平行開始請求。
 
 ## 部署環境變數
 
-必要值：`DATABASE_URL`、`SECRET_KEY`、`RATE_LIMIT_SECRET`、`DEMO_BOOTSTRAP_PASSWORD`、`ADMIN_BOOTSTRAP_PASSWORD`。`TRUSTED_PROXY_IPS` 僅能列出自己控制的 Reverse Proxy；未設定時不信任 `X-Forwarded-For`。AI 相關變數為選填。
+必要值：`DATABASE_URL`、`SECRET_KEY`、`RATE_LIMIT_SECRET`、`DEMO_BOOTSTRAP_PASSWORD`、`ADMIN_BOOTSTRAP_PASSWORD`。正式環境的 `DATABASE_URL` 必須使用 `sslmode=require`、`verify-ca` 或 `verify-full`；不加密的 PostgreSQL 連線會直接拒絕啟動。`TRUSTED_PROXY_IPS` 僅能列出自己控制的 Reverse Proxy；未設定時不信任 `X-Forwarded-For`。AI 相關變數為選填。
 
-根目錄的 `render.yaml` 會建立 Docker Web Service 與 PostgreSQL，並由 Render 產生 `SECRET_KEY`、`RATE_LIMIT_SECRET`；課堂展示管理員固定使用公開密碼 `Admin12345`，每次啟動會同步該展示帳號的密碼。`AI_API_KEY`、`AI_MODEL` 預設保持空白，因此不會阻擋核心功能部署；要啟用 AI 規劃時，請在 Render 的 Environment 頁面同時填入這兩個值，金鑰不可寫進 Git。免費 PostgreSQL 適合展示與驗收，不應作為長期正式資料庫；請在平台期限前升級或匯出資料。
+根目錄的 `render.yaml` 建立 Render Docker Web Service，並由 Render 產生 `SECRET_KEY`、`RATE_LIMIT_SECRET`。`DATABASE_URL` 使用 `sync: false`，由 Render Dashboard 安全指向 Neon PostgreSQL，不會被 Blueprint 覆寫或寫入 Git。課堂展示管理員固定使用公開密碼 `Admin12345`，每次啟動會同步該展示帳號的密碼。`AI_API_KEY`、`AI_MODEL` 預設保持空白，因此不會阻擋核心功能部署；要啟用 AI 規劃時，請在 Render 的 Environment 頁面同時填入這兩個值，金鑰不可寫進 Git。
 
 本次 72 頁規格書的本機實作狀態請見 `../docs/validation/IMPLEMENTATION_STATUS_2026-10-14.md`；完整架構、ERD 與資料字典位於 `../output/specification/`。

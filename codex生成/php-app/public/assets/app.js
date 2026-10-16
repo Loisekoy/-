@@ -456,7 +456,7 @@ function manualPlannerMarkup() {
                     <div class="manual-picker">
                         <div class="manual-section-title"><strong>從動作庫加入</strong><span>符合 ${formatNumber(filtered.length)} 個</span></div>
                         <div class="manual-picker-filters">
-                            <input id="manual-exercise-search" type="search" maxlength="100" placeholder="搜尋動作、部位或器材" value="${escapeHtml(state.manualExerciseQuery)}">
+                            <input id="manual-exercise-search" type="search" maxlength="100" placeholder="搜尋動作、部位或器材" value="${escapeHtml(state.manualExerciseQuery)}" aria-label="搜尋自訂課表動作">
                             <select id="manual-body-part-filter" aria-label="自訂課表身體部位篩選"><option value="">全部部位</option>${state.reference.body_parts.map((part) => `<option value="${part.body_part_id}" ${String(part.body_part_id) === String(state.manualBodyPartId) ? 'selected' : ''}>${escapeHtml(part.body_part_name)}</option>`).join('')}</select>
                             <button type="button" class="button button-small" data-action="manual-apply-filter">搜尋</button>
                         </div>
@@ -533,7 +533,7 @@ async function renderPlans() {
                             <div class="form-actions" style="margin-top:0">
                                 ${state.planEditing
                                     ? `<button class="button" data-action="cancel-plan-edit">取消</button><button class="button button-primary" data-action="save-plan" data-plan-id="${selected.workout_plan_id}">儲存課表</button>`
-                                    : `<button class="button" data-action="edit-plan">編輯課表</button><button class="button button-danger" data-action="delete-plan" data-plan-id="${selected.workout_plan_id}">刪除</button>`}
+                                    : `<button class="button" data-action="edit-plan">編輯課表</button><button class="button button-danger" data-action="delete-plan" data-plan-id="${selected.workout_plan_id}">封存課表</button>`}
                             </div>
                         </div>
                         <div class="plan-meta">
@@ -762,10 +762,10 @@ async function renderExercises() {
     main.innerHTML = `
         <div class="page-shell">
             <div class="page-header"><div><h1 class="page-title zh">動作資料庫</h1><p class="page-subtitle">搜尋動作、器材、難度與中文步驟，GIF 來自你提供的本機資料集。</p></div><span class="stat-label">共 ${formatNumber(total)} 個動作</span></div>
-            <form id="exercise-filter-form" class="toolbar">
-                <input name="q" type="search" maxlength="100" placeholder="搜尋動作名稱或身體部位" value="${escapeHtml(state.exerciseFilters.q)}">
-                <select name="body_part_id"><option value="">全部部位</option>${state.reference.body_parts.map((part) => `<option value="${part.body_part_id}" ${String(part.body_part_id) === String(state.exerciseFilters.body_part_id) ? 'selected' : ''}>${escapeHtml(part.body_part_name)}</option>`).join('')}</select>
-                <select name="difficulty_level"><option value="">全部難度</option>${['Beginner', 'Intermediate', 'Advanced'].map((level) => `<option ${level === state.exerciseFilters.difficulty_level ? 'selected' : ''}>${level}</option>`).join('')}</select>
+            <form id="exercise-filter-form" class="toolbar" aria-label="動作資料庫篩選">
+                <input name="q" type="search" maxlength="100" placeholder="搜尋動作名稱或身體部位" value="${escapeHtml(state.exerciseFilters.q)}" aria-label="搜尋動作名稱或身體部位">
+                <select name="body_part_id" aria-label="依身體部位篩選"><option value="">全部部位</option>${state.reference.body_parts.map((part) => `<option value="${part.body_part_id}" ${String(part.body_part_id) === String(state.exerciseFilters.body_part_id) ? 'selected' : ''}>${escapeHtml(part.body_part_name)}</option>`).join('')}</select>
+                <select name="difficulty_level" aria-label="依難度篩選"><option value="">全部難度</option>${['Beginner', 'Intermediate', 'Advanced'].map((level) => `<option ${level === state.exerciseFilters.difficulty_level ? 'selected' : ''}>${level}</option>`).join('')}</select>
             </form>
             ${items.length ? `<div class="exercise-grid">${items.map((exercise) => `
                 <article class="exercise-card">

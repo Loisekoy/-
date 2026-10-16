@@ -27,6 +27,8 @@ def parse_schema(sql: str) -> tuple[set[str], set[tuple[str, str, str, str]]]:
     )
     for table_match in table_pattern.finditer(sql):
         child_table = table_match.group(1).lower()
+        if child_table == "schema_migrations":
+            continue
         tables.add(child_table)
         for reference in reference_pattern.finditer(table_match.group(2)):
             relationships.add(

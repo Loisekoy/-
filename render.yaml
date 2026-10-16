@@ -18,9 +18,9 @@ services:
       - key: RATE_LIMIT_SECRET
         generateValue: true
       - key: DATABASE_URL
-        fromDatabase:
-          name: fittrack-pro-db
-          property: connectionString
+        # Neon pooled connection string is managed in the Render dashboard.
+        # Keep it out of Git and prevent Blueprint syncs from overwriting it.
+        sync: false
       - key: DEMO_BOOTSTRAP_PASSWORD
         value: Demo12345
       - key: ADMIN_BOOTSTRAP_PASSWORD
@@ -31,10 +31,3 @@ services:
         value: ""
       - key: AI_API_URL
         value: https://api.openai.com/v1/chat/completions
-
-databases:
-  - name: fittrack-pro-db
-    plan: free
-    region: singapore
-    databaseName: fittrack
-    user: fittrack

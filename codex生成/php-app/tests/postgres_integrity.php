@@ -248,6 +248,153 @@ try {
     $activeCount->execute([$concurrent['user_id']]);
     checkPg((int) $activeCount->fetchColumn() === 1, '使用者列鎖與部分唯一索引保證僅一個進行中場次');
 
+    $differentDay = createPreparedUser($pdo, $suffix . '-different-day');
+    $createdUserIds[] = $differentDay['user_id'];
+    $dayStatement = $pdo->prepare(
+        'SELECT pd.plan_day_id FROM plan_days pd JOIN workout_plans wp ON wp.workout_plan_id=pd.workout_plan_id '
+        . 'WHERE wp.user_id=? ORDER BY pd.day_number LIMIT 2'
+    );
+    $dayStatement->execute([$differentDay['user_id']]);
+    $differentDayIds = array_map('intval', $dayStatement->fetchAll(PDO::FETCH_COLUMN));
+    checkPg(count($differentDayIds) === 2, '異日併發測試具有兩個不同課表日');
+    $differentDayFiles = [];
+    foreach ($differentDayIds as $worker => $differentPlanDayId) {
+        $resultFile = sys_get_temp_dir() . '/fittrack-pg-different-day-' . getmypid() . '-' . $worker . '.json';
+        $differentDayFiles[] = $resultFile;
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            throw new RuntimeException('Unable to fork different-day concurrency worker.');
+        }
+        if ($pid === 0) {
+            try {
+                $childPdo = independentPdo($databaseUrl);
+                usleep(100000);
+                [$childStatus, $childSession] = invokeStart(
+                    $childPdo,
+                    $differentDay['user_id'],
+                    $differentPlanDayId
+                );
+                $payload = ['status' => $childStatus, 'session_id' => $childSession['workout_session_id'] ?? null];
+            } catch (ApiException $error) {
+                $payload = ['status' => $error->status, 'code' => $error->errorCode];
+            } catch (Throwable $error) {
+                $payload = ['error' => get_class($error), 'message' => $error->getMessage()];
+            }
+            file_put_contents($resultFile, json_encode($payload, JSON_THROW_ON_ERROR));
+            exit(isset($payload['error']) ? 1 : 0);
+        }
+    }
+    while (pcntl_wait($workerStatus) > 0) {
+        // Wait for both different-day requests.
+    }
+    $differentResults = [];
+    foreach ($differentDayFiles as $resultFile) {
+        $differentResults[] = json_decode((string) file_get_contents($resultFile), true, 512, JSON_THROW_ON_ERROR);
+        unlink($resultFile);
+    }
+    $pdo = independentPdo($databaseUrl);
+    checkPg(!isset($differentResults[0]['error'], $differentResults[1]['error']), '異日平行 Request 均回傳明確 API 狀態');
+    $differentStatuses = array_map(static fn (array $item): int => (int) $item['status'], $differentResults);
+    sort($differentStatuses);
+    checkPg($differentStatuses === [201, 409], '異日同時開始僅一個 201，另一個 409');
+    $activeCount = $pdo->prepare("SELECT COUNT(*) FROM workout_sessions WHERE user_id=? AND status='in_progress'");
+    $activeCount->execute([$differentDay['user_id']]);
+    checkPg((int) $activeCount->fetchColumn() === 1, '異日併發不會產生兩個進行中場次');
+
+    $deleteRace = createPreparedUser($pdo, $suffix . '-delete-race');
+    $createdUserIds[] = $deleteRace['user_id'];
+    [$deleteStatus, $deleteSession] = invokeStart($pdo, $deleteRace['user_id'], $deleteRace['plan_day_id']);
+    checkPg($deleteStatus === 201, '最後組併發刪除測試場次已建立');
+    $deleteSessionId = (int) $deleteSession['workout_session_id'];
+    $deleteExerciseId = (int) $deleteSession['exercises'][0]['workout_session_exercise_id'];
+    $deleteSetStatement = $pdo->prepare(
+        'INSERT INTO workout_sets (workout_session_exercise_id, set_number, weight_kg, reps) '
+        . 'VALUES (?, ?, 30.00, 10) RETURNING workout_set_id'
+    );
+    $deleteSetIds = [];
+    foreach ([1, 2] as $setNumber) {
+        $deleteSetStatement->execute([$deleteExerciseId, $setNumber]);
+        $deleteSetIds[] = (int) $deleteSetStatement->fetchColumn();
+    }
+    $pdo->prepare("UPDATE workout_sessions SET status='completed', ended_at=CURRENT_TIMESTAMP WHERE workout_session_id=?")
+        ->execute([$deleteSessionId]);
+
+    $readyFiles = [
+        sys_get_temp_dir() . '/fittrack-pg-delete-ready-' . getmypid() . '-0',
+        sys_get_temp_dir() . '/fittrack-pg-delete-ready-' . getmypid() . '-1',
+    ];
+    $deleteResultFiles = [
+        sys_get_temp_dir() . '/fittrack-pg-delete-result-' . getmypid() . '-0.json',
+        sys_get_temp_dir() . '/fittrack-pg-delete-result-' . getmypid() . '-1.json',
+    ];
+    foreach ($deleteSetIds as $worker => $deleteSetId) {
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            throw new RuntimeException('Unable to fork last-set delete worker.');
+        }
+        if ($pid === 0) {
+            $payload = [];
+            try {
+                $childPdo = independentPdo($databaseUrl);
+                $childPdo->beginTransaction();
+                $childPdo->prepare('DELETE FROM workout_sets WHERE workout_set_id=?')->execute([$deleteSetId]);
+                file_put_contents($readyFiles[$worker], 'ready');
+                $other = $readyFiles[1 - $worker];
+                $deadline = microtime(true) + 5;
+                while (!is_file($other) && microtime(true) < $deadline) {
+                    usleep(10000);
+                }
+                if (!is_file($other)) {
+                    throw new RuntimeException('Delete concurrency barrier timed out.');
+                }
+                $childPdo->commit();
+                $payload = ['status' => 'committed'];
+            } catch (PDOException $error) {
+                if (isset($childPdo) && $childPdo->inTransaction()) {
+                    $childPdo->rollBack();
+                }
+                $payload = ['status' => 'rejected', 'code' => $error->getCode()];
+            } catch (Throwable $error) {
+                if (isset($childPdo) && $childPdo->inTransaction()) {
+                    $childPdo->rollBack();
+                }
+                $payload = ['error' => get_class($error), 'message' => $error->getMessage()];
+            }
+            file_put_contents($deleteResultFiles[$worker], json_encode($payload, JSON_THROW_ON_ERROR));
+            exit(isset($payload['error']) ? 1 : 0);
+        }
+    }
+    while (pcntl_wait($workerStatus) > 0) {
+        // Wait for both delete transactions to commit or roll back.
+    }
+    $deleteResults = [];
+    foreach ($deleteResultFiles as $resultFile) {
+        $deleteResults[] = json_decode((string) file_get_contents($resultFile), true, 512, JSON_THROW_ON_ERROR);
+        unlink($resultFile);
+    }
+    foreach ($readyFiles as $readyFile) {
+        if (is_file($readyFile)) {
+            unlink($readyFile);
+        }
+    }
+    $pdo = independentPdo($databaseUrl);
+    checkPg(!isset($deleteResults[0]['error'], $deleteResults[1]['error']), '兩個刪組交易均取得明確結果');
+    $committedDeletes = count(array_filter(
+        $deleteResults,
+        static fn (array $item): bool => ($item['status'] ?? '') === 'committed'
+    ));
+    $constraintRejects = count(array_filter(
+        $deleteResults,
+        static fn (array $item): bool => ($item['code'] ?? '') === '23514'
+    ));
+    checkPg($committedDeletes === 1 && $constraintRejects === 1, '兩筆最後組併發刪除僅一筆提交，另一筆以 23514 回滾');
+    $remainingSets = $pdo->prepare(
+        'SELECT COUNT(*) FROM workout_sets ws JOIN workout_session_exercises wse '
+        . 'ON wse.workout_session_exercise_id=ws.workout_session_exercise_id WHERE wse.workout_session_id=?'
+    );
+    $remainingSets->execute([$deleteSessionId]);
+    checkPg((int) $remainingSets->fetchColumn() === 1, '併發刪除後 completed 場次仍保留一組');
+
     echo "PostgreSQL integrity and concurrency checks completed.\n";
 } finally {
     foreach ($createdUserIds as $userId) {

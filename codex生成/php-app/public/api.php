@@ -49,8 +49,25 @@ try {
         $body['field_errors'] = (object) $error->fieldErrors;
     }
     echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+} catch (PDOException $error) {
+    $retryable = ['40P01', '55P03', '57014'];
+    if (in_array((string) $error->getCode(), $retryable, true)) {
+        header('Retry-After: 1');
+        http_response_code(503);
+        echo json_encode([
+            'code' => 'DATABASE_RETRY_REQUIRED',
+            'message' => '資料庫正在處理同時操作，請稍候重試。',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } else {
+        error_log('Database request failed [' . $error->getCode() . ']');
+        http_response_code(500);
+        echo json_encode([
+            'code' => 'INTERNAL_ERROR',
+            'message' => '系統暫時無法處理這個要求，請稍後再試。',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
 } catch (Throwable $error) {
-    error_log((string) $error);
+    error_log('Unhandled request failure [' . get_class($error) . '] code=' . $error->getCode());
     http_response_code(500);
     echo json_encode([
         'code' => 'INTERNAL_ERROR',

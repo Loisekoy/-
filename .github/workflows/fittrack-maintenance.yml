@@ -1,0 +1,128 @@
+name: FitTrack daily maintenance and verified backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 03:17 Asia/Taipei. A non-zero minute reduces peak-time scheduling delays.
+    - cron: "17 19 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fittrack-daily-maintenance
+  cancel-in-progress: false
+
+jobs:
+  cleanup-backup-and-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fittrack
+          POSTGRES_PASSWORD: fittrack-test-password
+          POSTGRES_DB: fittrack_restore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fittrack -d fittrack_restore"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Check required secrets
+        env:
+          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_URL }}
+          FITTRACK_BACKUP_KEY: ${{ secrets.FITTRACK_BACKUP_KEY }}
+        run: |
+          test -n "$FITTRACK_DATABASE_URL"
+          test "${#FITTRACK_BACKUP_KEY}" -ge 32
+
+      - name: Check out deployed application branch
+        uses: actions/checkout@v5
+        with:
+          ref: codex/fitness-tracking-system
+
+      - name: Build the same PHP image used by Render
+        run: docker build --file Dockerfile.render --tag fittrack-acceptance .
+
+      - name: Remove expired sessions and login failures
+        env:
+          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_URL }}
+        run: >-
+          docker run --rm --network host
+          --env DATABASE_URL="$FITTRACK_DATABASE_URL"
+          --env APP_ENV=production
+          --env SECRET_KEY=acceptance-only-secret-key-with-32-bytes
+          --env RATE_LIMIT_SECRET=acceptance-only-rate-key-with-32-bytes
+          --entrypoint php fittrack-acceptance bin/cleanup-expired.php
+
+      - name: Create database and media manifests
+        env:
+          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_URL }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/fittrack-backup"
+          docker run --rm --network host \
+            --env DATABASE_URL="$FITTRACK_DATABASE_URL" \
+            --env APP_ENV=production \
+            --env SECRET_KEY=acceptance-only-secret-key-with-32-bytes \
+            --env RATE_LIMIT_SECRET=acceptance-only-rate-key-with-32-bytes \
+            --volume "$RUNNER_TEMP/fittrack-backup:/backup" \
+            --entrypoint php fittrack-acceptance \
+            bin/database-manifest.php --write /backup/database-manifest.json
+          php codex生成/php-app/bin/verify-media-manifest.php
+          cp codex生成/php-app/docs/validation/media-sha256.txt "$RUNNER_TEMP/fittrack-backup/"
+
+      - name: Create PostgreSQL backup
+        env:
+          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_URL }}
+        run: >-
+          docker run --rm --network host
+          --volume "$RUNNER_TEMP/fittrack-backup:/backup"
+          postgres:16 pg_dump "$FITTRACK_DATABASE_URL"
+          --format=custom --no-owner --no-acl --file=/backup/database.dump
+
+      - name: Restore into an independent PostgreSQL database
+        run: |
+          docker run --rm --network host \
+            --volume "$RUNNER_TEMP/fittrack-backup:/backup" \
+            postgres:16 pg_restore \
+            --dbname=postgresql://fittrack:fittrack-test-password@127.0.0.1:5432/fittrack_restore \
+            --no-owner --no-acl --exit-on-error /backup/database.dump
+          docker run --rm --network host \
+            --env DATABASE_URL=postgresql://fittrack:fittrack-test-password@127.0.0.1:5432/fittrack_restore?sslmode=disable \
+            --env APP_ENV=test \
+            --env SECRET_KEY=acceptance-only-secret-key-with-32-bytes \
+            --env RATE_LIMIT_SECRET=acceptance-only-rate-key-with-32-bytes \
+            --volume "$RUNNER_TEMP/fittrack-backup:/backup" \
+            --entrypoint php fittrack-acceptance \
+            bin/database-manifest.php --verify /backup/database-manifest.json
+
+      - name: Encrypt backup package
+        env:
+          FITTRACK_BACKUP_KEY: ${{ secrets.FITTRACK_BACKUP_KEY }}
+        run: |
+          tar -C "$RUNNER_TEMP/fittrack-backup" -czf "$RUNNER_TEMP/fittrack-backup.tar.gz" \
+            database.dump database-manifest.json media-sha256.txt
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+            -in "$RUNNER_TEMP/fittrack-backup.tar.gz" \
+            -out "$RUNNER_TEMP/fittrack-backup-${GITHUB_RUN_ID}.tar.gz.enc" \
+            -pass env:FITTRACK_BACKUP_KEY
+          openssl dgst -sha256 "$RUNNER_TEMP/fittrack-backup-${GITHUB_RUN_ID}.tar.gz.enc" \
+            > "$RUNNER_TEMP/fittrack-backup-${GITHUB_RUN_ID}.sha256"
+          find "$RUNNER_TEMP/fittrack-backup" -type f -delete
+          find "$RUNNER_TEMP" -maxdepth 1 -name 'fittrack-backup.tar.gz' -type f -delete
+
+      - name: Keep the encrypted backup for seven days
+        uses: actions/upload-artifact@v4
+        with:
+          name: fittrack-backup-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/fittrack-backup-${{ github.run_id }}.tar.gz.enc
+            ${{ runner.temp }}/fittrack-backup-${{ github.run_id }}.sha256
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

@@ -30,16 +30,35 @@ $hasVersions = (int) $pdo->query(
     "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='exercise_versions'"
 )->fetchColumn();
 if ($hasVersions > 0) {
-    fwrite(STDOUT, "Current v1.1 structure already present; migration skipped.\n");
-    exit(0);
+    fwrite(STDOUT, "Current v1.1 structure already present.\n");
+} else {
+    $path = dirname(__DIR__) . '/database/migrations/20261006_teacher_review_v1_1.sql';
+    $sql = file_get_contents($path);
+    if ($sql === false) {
+        throw new RuntimeException('Migration file is missing: ' . $path);
+    }
+
+    fwrite(STDOUT, "Applying v1.1 migration after preflight checks...\n");
+    $pdo->exec($sql);
+    fwrite(STDOUT, "Migration 20261006_teacher_review_v1_1 applied.\n");
 }
 
-$path = dirname(__DIR__) . '/database/migrations/20261006_teacher_review_v1_1.sql';
-$sql = file_get_contents($path);
-if ($sql === false) {
-    throw new RuntimeException('Migration file is missing: ' . $path);
+$pdo->exec(
+    'CREATE TABLE IF NOT EXISTS schema_migrations ('
+    . 'version VARCHAR(80) PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)'
+);
+$hardeningVersion = '20261016_acceptance_hardening';
+$versionStatement = $pdo->prepare('SELECT 1 FROM schema_migrations WHERE version = ?');
+$versionStatement->execute([$hardeningVersion]);
+if (!$versionStatement->fetchColumn()) {
+    $hardeningPath = dirname(__DIR__) . '/database/migrations/' . $hardeningVersion . '.sql';
+    $hardeningSql = file_get_contents($hardeningPath);
+    if ($hardeningSql === false) {
+        throw new RuntimeException('Migration file is missing: ' . $hardeningPath);
+    }
+    fwrite(STDOUT, "Applying acceptance concurrency hardening...\n");
+    $pdo->exec($hardeningSql);
+    fwrite(STDOUT, "Migration {$hardeningVersion} applied.\n");
+} else {
+    fwrite(STDOUT, "Migration {$hardeningVersion} already applied.\n");
 }
-
-fwrite(STDOUT, "Applying v1.1 migration after preflight checks...\n");
-$pdo->exec($sql);
-fwrite(STDOUT, "Migration 20261006_teacher_review_v1_1 applied.\n");

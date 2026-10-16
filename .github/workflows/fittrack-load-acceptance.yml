@@ -1,0 +1,101 @@
+name: FitTrack 200-user acceptance load test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-load-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fittrack
+          POSTGRES_PASSWORD: fittrack-test-password
+          POSTGRES_DB: fittrack_load
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fittrack -d fittrack_load"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Check out deployed application branch
+        uses: actions/checkout@v5
+        with:
+          ref: codex/fitness-tracking-system
+
+      - name: Build acceptance image
+        run: docker build --file Dockerfile.render --tag fittrack-acceptance .
+
+      - name: Initialize the isolated database
+        run: >-
+          docker run --rm --network host
+          --env DATABASE_URL=postgresql://fittrack:fittrack-test-password@127.0.0.1:5432/fittrack_load?sslmode=disable
+          --env APP_ENV=test
+          --env SECRET_KEY=acceptance-only-secret-key-with-32-bytes
+          --env RATE_LIMIT_SECRET=acceptance-only-rate-key-with-32-bytes
+          --entrypoint php fittrack-acceptance bin/setup.php
+
+      - name: Run PostgreSQL integrity and concurrency checks
+        run: >-
+          docker run --rm --network host
+          --env DATABASE_URL=postgresql://fittrack:fittrack-test-password@127.0.0.1:5432/fittrack_load?sslmode=disable
+          --env APP_ENV=test
+          --env SECRET_KEY=acceptance-only-secret-key-with-32-bytes
+          --env RATE_LIMIT_SECRET=acceptance-only-rate-key-with-32-bytes
+          --env FITTRACK_TEST_DATABASE=1
+          --entrypoint php fittrack-acceptance tests/postgres_integrity.php
+
+      - name: Seed the SRS data volume
+        run: |
+          mkdir -p "$RUNNER_TEMP/fittrack-load" "$RUNNER_TEMP/fittrack-results"
+          docker run --rm --network host \
+            --env DATABASE_URL=postgresql://fittrack:fittrack-test-password@127.0.0.1:5432/fittrack_load?sslmode=disable \
+            --env APP_ENV=test \
+            --env SECRET_KEY=acceptance-only-secret-key-with-32-bytes \
+            --env RATE_LIMIT_SECRET=acceptance-only-rate-key-with-32-bytes \
+            --env FITTRACK_TEST_DATABASE=1 \
+            --volume "$RUNNER_TEMP/fittrack-load:/data" \
+            --entrypoint php fittrack-acceptance bin/seed-load-test.php /data/users.json
+
+      - name: Start the isolated application
+        run: |
+          docker run --detach --name fittrack-load-app --network host \
+            --env DATABASE_URL=postgresql://fittrack:fittrack-test-password@127.0.0.1:5432/fittrack_load?sslmode=disable \
+            --env APP_ENV=test \
+            --env SECRET_KEY=acceptance-only-secret-key-with-32-bytes \
+            --env RATE_LIMIT_SECRET=acceptance-only-rate-key-with-32-bytes \
+            fittrack-acceptance
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1/api/health >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          docker logs fittrack-load-app
+          exit 1
+
+      - name: Run 60-second warmup and 200-user five-minute acceptance test
+        run: >-
+          docker run --rm --network host
+          --volume "$RUNNER_TEMP/fittrack-load:/data:ro"
+          --volume "$RUNNER_TEMP/fittrack-results:/results"
+          --volume "$PWD/codex生成/php-app/tests/load:/scripts:ro"
+          --env BASE_URL=http://127.0.0.1
+          --env USERS_FILE=/data/users.json
+          grafana/k6:0.54.0 run
+          --summary-export=/results/summary.json /scripts/fittrack.js
+
+      - name: Upload non-sensitive performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fittrack-load-test-${{ github.run_id }}
+          path: ${{ runner.temp }}/fittrack-results/summary.json
+          if-no-files-found: warn
+          retention-days: 30
