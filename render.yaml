@@ -5,9 +5,9 @@ services:
     plan: free
     region: singapore
     branch: codex/fitness-tracking-system
-    rootDir: codex生成/php-app
-    dockerfilePath: ./codex生成/php-app/Dockerfile
-    dockerContext: ./codex生成/php-app
+    rootDir: .
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
     healthCheckPath: /api/health
     autoDeployTrigger: commit
     envVars:
