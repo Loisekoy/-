@@ -244,6 +244,7 @@ function renderAuth(mode) {
                     </p>
                     <div class="demo-note">
                         示範會員：demo@fittrack.local / Demo12345<br>
+                        課堂展示管理員：admin@fittrack.local / Admin12345<br>
                         你也可以免費註冊自己的帳號
                     </div>
                 </div>

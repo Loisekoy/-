@@ -24,7 +24,7 @@ services:
       - key: DEMO_BOOTSTRAP_PASSWORD
         value: Demo12345
       - key: ADMIN_BOOTSTRAP_PASSWORD
-        generateValue: true
+        value: Admin12345
       - key: AI_API_KEY
         value: ""
       - key: AI_MODEL

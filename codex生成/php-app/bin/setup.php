@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require dirname(__DIR__) . '/src/bootstrap.php';
 
+use FitTrack\Config;
 use FitTrack\Database;
 use FitTrack\PlanGenerator;
 use FitTrack\Seeder;
@@ -29,6 +30,22 @@ if (Database::driver() === 'pgsql') {
 $goalCount = (int) $pdo->query('SELECT COUNT(*) FROM training_goals')->fetchColumn();
 if ($goalCount === 0) {
     Seeder::seed($pdo);
+}
+$adminPassword = Config::get('ADMIN_BOOTSTRAP_PASSWORD', 'Admin12345') ?? '';
+if (strlen($adminPassword) < 8) {
+    throw new RuntimeException('管理員初始密碼至少需要 8 個字元。');
+}
+$adminAuthStatement = $pdo->prepare(
+    "SELECT ua.user_id, ua.password_hash FROM user_auth ua "
+    . "JOIN admins a ON a.user_id = ua.user_id WHERE ua.email = ?"
+);
+$adminAuthStatement->execute(['admin@fittrack.local']);
+$adminAuth = $adminAuthStatement->fetch(PDO::FETCH_ASSOC);
+if ($adminAuth !== false && !password_verify($adminPassword, (string) $adminAuth['password_hash'])) {
+    $pdo->prepare('UPDATE user_auth SET password_hash = ? WHERE user_id = ?')->execute([
+        password_hash($adminPassword, PASSWORD_BCRYPT, ['cost' => 10]),
+        (int) $adminAuth['user_id'],
+    ]);
 }
 $demoUserId = (int) $pdo->query(
     "SELECT u.user_id FROM users u JOIN user_auth ua ON ua.user_id = u.user_id WHERE ua.email='demo@fittrack.local'"
@@ -111,4 +128,4 @@ if ($demoUserId > 0 && (int) $bodyRecordCount->fetchColumn() < 4) {
 
 echo "Database ready (" . Database::driver() . ").\n";
 echo "Demo member: demo@fittrack.local\n";
-echo "Admin account: admin@fittrack.local (password is stored only in the deployment environment)\n";
+echo "Demo admin: admin@fittrack.local\n";

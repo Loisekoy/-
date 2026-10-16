@@ -62,7 +62,7 @@ php bin/import-exercises.php
 - 正式 PostgreSQL 建表定義：`database/postgres.sql`；部署時由 `DATABASE_URL` 指向雲端資料庫，不會使用本機 SQLite 檔案。
 - 管理員登入後可從「管理 → 資料庫系統」查看 20 張應用資料表、25 條外鍵與查詢範例。
 
-部署前必須在環境變數設定新密碼，不可將真實密碼寫進 Git。
+上述管理員是刻意公開的課堂展示帳號，不可存放真實個資或正式環境資料；正式上線前必須改用未公開的密碼。
 
 若本機已有舊版 15 表的 `storage/app.sqlite`，首次執行會先在同目錄建立
 `app.sqlite.backup-v1.0-<UTC時間>` 備份，再原地升級為 20 表的 v1.1 結構；
@@ -106,6 +106,6 @@ DATABASE_URL='postgresql://.../fittrack_test' FITTRACK_TEST_DATABASE=1 php tests
 
 必要值：`DATABASE_URL`、`SECRET_KEY`、`RATE_LIMIT_SECRET`、`DEMO_BOOTSTRAP_PASSWORD`、`ADMIN_BOOTSTRAP_PASSWORD`。`TRUSTED_PROXY_IPS` 僅能列出自己控制的 Reverse Proxy；未設定時不信任 `X-Forwarded-For`。AI 相關變數為選填。
 
-根目錄的 `render.yaml` 會建立 Docker Web Service 與 PostgreSQL，並由 Render 產生 `SECRET_KEY`、`RATE_LIMIT_SECRET` 與管理員初始密碼。`AI_API_KEY`、`AI_MODEL` 預設保持空白，因此不會阻擋核心功能部署；要啟用 AI 規劃時，請在 Render 的 Environment 頁面同時填入這兩個值，金鑰不可寫進 Git。免費 PostgreSQL 適合展示與驗收，不應作為長期正式資料庫；請在平台期限前升級或匯出資料。
+根目錄的 `render.yaml` 會建立 Docker Web Service 與 PostgreSQL，並由 Render 產生 `SECRET_KEY`、`RATE_LIMIT_SECRET`；課堂展示管理員固定使用公開密碼 `Admin12345`，每次啟動會同步該展示帳號的密碼。`AI_API_KEY`、`AI_MODEL` 預設保持空白，因此不會阻擋核心功能部署；要啟用 AI 規劃時，請在 Render 的 Environment 頁面同時填入這兩個值，金鑰不可寫進 Git。免費 PostgreSQL 適合展示與驗收，不應作為長期正式資料庫；請在平台期限前升級或匯出資料。
 
 本次 72 頁規格書的本機實作狀態請見 `../docs/validation/IMPLEMENTATION_STATUS_2026-10-14.md`；完整架構、ERD 與資料字典位於 `../output/specification/`。
