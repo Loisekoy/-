@@ -127,4 +127,4 @@ DATABASE_URL='postgresql://.../fittrack_test' FITTRACK_TEST_DATABASE=1 php tests
 
 根目錄的 `render.yaml` 建立 Render Docker Web Service，並由 Render 產生 `SECRET_KEY`、`RATE_LIMIT_SECRET`。`DATABASE_URL` 使用 `sync: false`，由 Render Dashboard 安全指向 Neon PostgreSQL，不會被 Blueprint 覆寫或寫入 Git。課堂展示管理員固定使用公開密碼 `Admin12345`，每次啟動會同步該展示帳號的密碼。`AI_API_KEY`、`AI_MODEL` 預設保持空白，因此不會阻擋核心功能部署；要啟用 AI 規劃時，請在 Render 的 Environment 頁面同時填入這兩個值，金鑰不可寫進 Git。
 
-資料庫關聯、展示順序與老師口試題目請見 [`../docs/操作手冊_資料庫與口試準備.md`](../docs/操作手冊_資料庫與口試準備.md)。本次 72 頁規格書的本機實作狀態請見 `../docs/validation/IMPLEMENTATION_STATUS_2026-10-14.md`；完整架構、ERD 與資料字典位於 `../output/specification/`。
+本次 72 頁規格書的本機實作狀態請見 `../docs/validation/IMPLEMENTATION_STATUS_2026-10-14.md`；完整架構、ERD 與資料字典位於 `../output/specification/`。

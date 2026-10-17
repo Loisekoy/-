@@ -10,7 +10,6 @@
 - Deployment：Docker + Render Blueprint
 - Schema：20 張應用資料表、25 條外鍵
 - 正式規格書：`output/specification/`
-- 資料庫與口試操作手冊：[`docs/操作手冊_資料庫與口試準備.md`](./docs/操作手冊_資料庫與口試準備.md)
 - 教師建議追蹤：`docs/TEACHER_REVIEW_TRACEABILITY.md`
 - 修訂記錄：`CHANGELOG.md`
 
