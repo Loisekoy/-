@@ -135,8 +135,20 @@ function navigate(route) {
     location.hash = next;
 }
 
+function directPathRoute() {
+    const path = location.pathname.replace(/\/+$/, '') || '/';
+    if (path === '/admin/login') return 'login';
+    if (path === '/admin') return 'admin';
+    if (path === '/database') return 'database';
+    return '';
+}
+
+function directAdminEntry() {
+    return ['/admin/login', '/admin', '/database'].includes(location.pathname.replace(/\/+$/, '') || '/');
+}
+
 function currentRoute() {
-    return location.hash.replace(/^#/, '') || (state.authenticated ? 'dashboard' : 'home');
+    return location.hash.replace(/^#/, '') || directPathRoute() || (state.authenticated ? 'dashboard' : 'home');
 }
 
 function renderHeader() {
@@ -1039,8 +1051,8 @@ async function renderRoute() {
     try {
         if (!state.authenticated) {
             renderHeader();
-            if (state.route === 'login' || state.route === 'register') {
-                renderAuth(state.route);
+            if (state.route === 'login' || state.route === 'register' || state.route === 'admin' || state.route === 'database') {
+                renderAuth(state.route === 'register' ? 'register' : 'login');
             } else {
                 renderLanding();
             }
@@ -1048,7 +1060,7 @@ async function renderRoute() {
         }
 
         await ensureSessionData();
-        if (!state.me.profile_complete && !['profile', 'exercises', 'admin'].includes(state.route)) {
+        if (!state.me.profile_complete && !['profile', 'exercises', 'admin', 'database'].includes(state.route)) {
             location.hash = '#profile';
             return;
         }
@@ -1061,6 +1073,10 @@ async function renderRoute() {
             history: renderHistory,
             profile: renderProfile,
             admin: renderAdmin,
+            database: async () => {
+                state.adminTab = 'database';
+                return renderAdmin();
+            },
         };
         await (views[state.route] || renderDashboard)();
     } catch (error) {
@@ -1389,7 +1405,14 @@ document.addEventListener('submit', async (event) => {
             state.reference = null;
             await ensureSessionData();
             showToast(form.dataset.mode === 'register' ? '帳號建立成功。' : '登入成功。');
-            navigate(state.me.profile_complete ? 'dashboard' : 'profile');
+            const adminRequested = directAdminEntry() || state.route === 'admin' || state.route === 'database';
+            const databaseRequested = state.route === 'database' || location.pathname.replace(/\/+$/, '') === '/database';
+            if (adminRequested && state.me.is_admin) {
+                state.adminTab = databaseRequested ? 'database' : 'users';
+                navigate('admin');
+            } else {
+                navigate(state.me.profile_complete ? 'dashboard' : 'profile');
+            }
         } else if (form.id === 'exercise-filter-form') {
             state.exerciseFilters = values;
             state.exercisePage = 1;

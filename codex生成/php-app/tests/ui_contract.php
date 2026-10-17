@@ -27,6 +27,9 @@ contractCheck(str_contains($app, 'data-action="delete-plan"') && str_contains($a
 contractCheck(str_contains($app, 'aria-label="搜尋動作名稱或身體部位"')
     && str_contains($app, 'for="admin-exercise-name"')
     && str_contains($app, 'for="admin-exercise-description"'), '動作資料庫與管理表單具有可辨識欄位標籤');
+contractCheck(str_contains($app, "path === '/admin/login'")
+    && str_contains($app, "path === '/admin'")
+    && str_contains($app, "path === '/database'"), '公開 Demo 的管理者與資料庫連結可直接進入登入流程');
 
 contractCheck(str_contains($render, 'dockerfilePath: ./Dockerfile.render')
     && preg_match('/key: DATABASE_URL\s*\n\s*#.*\n\s*#.*\n\s*sync: false/s', $render) === 1,
