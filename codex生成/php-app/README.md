@@ -106,6 +106,8 @@ Migration 檔案為 `database/migrations/20261006_teacher_review_v1_1.sql`。正
 php tests/smoke.php
 php tests/sqlite_migration.php
 php tests/cleanup_expired.php
+php tests/admin_bootstrap.php
+php tests/ui_contract.php
 php bin/verify-media-manifest.php
 python3 tests/schema_consistency.py
 DATABASE_URL='postgresql://.../fittrack_test' FITTRACK_TEST_DATABASE=1 php tests/postgres_integrity.php
@@ -113,6 +115,8 @@ DATABASE_URL='postgresql://.../fittrack_test' FITTRACK_TEST_DATABASE=1 php tests
 
 - `smoke.php`：在暫存 SQLite 驗證完整功能流程。
 - `cleanup_expired.php`：建立 501 筆過期 Session 驗證分批清理、有效資料保留與無機密日誌。
+- `admin_bootstrap.php`：驗證容器重啟時會同步 `ADMIN_BOOTSTRAP_PASSWORD`，且舊密碼失效。
+- `ui_contract.php`：驗證總計時器、儲存後休息計時器、取消／封存操作、表單標籤、Render Secret 與每日備份還原契約。
 - `verify-media-manifest.php`：比對 2,648 個動作媒體的 SHA-256。
 - `schema_consistency.py`：比對 `postgres.sql` 與 `docs/schema_manifest.json`。
 - `postgres_integrity.php`：只允許在名稱含 `fittrack_` 的隔離測試庫執行，驗證 PostgreSQL Trigger、Constraint 與兩個平行開始請求。
@@ -123,4 +127,4 @@ DATABASE_URL='postgresql://.../fittrack_test' FITTRACK_TEST_DATABASE=1 php tests
 
 根目錄的 `render.yaml` 建立 Render Docker Web Service，並由 Render 產生 `SECRET_KEY`、`RATE_LIMIT_SECRET`。`DATABASE_URL` 使用 `sync: false`，由 Render Dashboard 安全指向 Neon PostgreSQL，不會被 Blueprint 覆寫或寫入 Git。課堂展示管理員固定使用公開密碼 `Admin12345`，每次啟動會同步該展示帳號的密碼。`AI_API_KEY`、`AI_MODEL` 預設保持空白，因此不會阻擋核心功能部署；要啟用 AI 規劃時，請在 Render 的 Environment 頁面同時填入這兩個值，金鑰不可寫進 Git。
 
-本次 72 頁規格書的本機實作狀態請見 `../docs/validation/IMPLEMENTATION_STATUS_2026-10-14.md`；完整架構、ERD 與資料字典位於 `../output/specification/`。
+資料庫關聯、展示順序與老師口試題目請見 [`../docs/操作手冊_資料庫與口試準備.md`](../docs/操作手冊_資料庫與口試準備.md)。本次 72 頁規格書的本機實作狀態請見 `../docs/validation/IMPLEMENTATION_STATUS_2026-10-14.md`；完整架構、ERD 與資料字典位於 `../output/specification/`。
