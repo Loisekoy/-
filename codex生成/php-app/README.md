@@ -115,7 +115,7 @@ DATABASE_URL='postgresql://.../fittrack_test' FITTRACK_TEST_DATABASE=1 php tests
 
 - `smoke.php`：在暫存 SQLite 驗證完整功能流程。
 - `cleanup_expired.php`：建立 501 筆過期 Session 驗證分批清理、有效資料保留與無機密日誌。
-- `admin_bootstrap.php`：驗證容器重啟時會同步 `ADMIN_BOOTSTRAP_PASSWORD`，且舊密碼失效。
+- `admin_bootstrap.php`：驗證容器重啟時會同步 `DEMO_ADMIN_PASSWORD`，且舊密碼失效。
 - `ui_contract.php`：驗證總計時器、儲存後休息計時器、取消／封存操作、表單標籤、Render Secret 與每日備份還原契約。
 - `verify-media-manifest.php`：比對 2,648 個動作媒體的 SHA-256。
 - `schema_consistency.py`：比對 `postgres.sql` 與 `docs/schema_manifest.json`。
@@ -123,7 +123,7 @@ DATABASE_URL='postgresql://.../fittrack_test' FITTRACK_TEST_DATABASE=1 php tests
 
 ## 部署環境變數
 
-必要值：`DATABASE_URL`、`SECRET_KEY`、`RATE_LIMIT_SECRET`、`DEMO_BOOTSTRAP_PASSWORD`、`ADMIN_BOOTSTRAP_PASSWORD`。正式環境的 `DATABASE_URL` 必須使用 `sslmode=require`、`verify-ca` 或 `verify-full`；不加密的 PostgreSQL 連線會直接拒絕啟動。`TRUSTED_PROXY_IPS` 僅能列出自己控制的 Reverse Proxy；未設定時不信任 `X-Forwarded-For`。AI 相關變數為選填。
+必要值：`DATABASE_URL`、`SECRET_KEY`、`RATE_LIMIT_SECRET`、`DEMO_BOOTSTRAP_PASSWORD`、`DEMO_ADMIN_PASSWORD`。正式環境的 `DATABASE_URL` 必須使用 `sslmode=require`、`verify-ca` 或 `verify-full`；不加密的 PostgreSQL 連線會直接拒絕啟動。`TRUSTED_PROXY_IPS` 僅能列出自己控制的 Reverse Proxy；未設定時不信任 `X-Forwarded-For`。AI 相關變數為選填。
 
 根目錄的 `render.yaml` 建立 Render Docker Web Service，並由 Render 產生 `SECRET_KEY`、`RATE_LIMIT_SECRET`。`DATABASE_URL` 使用 `sync: false`，由 Render Dashboard 安全指向 Neon PostgreSQL，不會被 Blueprint 覆寫或寫入 Git。課堂展示管理員固定使用公開密碼 `Admin12345`，每次啟動會同步該展示帳號的密碼。`AI_API_KEY`、`AI_MODEL` 預設保持空白，因此不會阻擋核心功能部署；要啟用 AI 規劃時，請在 Render 的 Environment 頁面同時填入這兩個值，金鑰不可寫進 Git。
 

@@ -8,7 +8,7 @@ putenv('SQLITE_PATH=' . $databasePath);
 putenv('SECRET_KEY=admin-bootstrap-test-secret');
 putenv('RATE_LIMIT_SECRET=admin-bootstrap-test-rate-secret');
 putenv('DEMO_BOOTSTRAP_PASSWORD=Demo12345');
-putenv('ADMIN_BOOTSTRAP_PASSWORD=InitialAdmin123');
+putenv('DEMO_ADMIN_PASSWORD=InitialAdmin123');
 
 require dirname(__DIR__) . '/src/bootstrap.php';
 
@@ -29,7 +29,7 @@ try {
 
     // setup.php is also run on every container start.  A changed Render
     // environment value must therefore repair the existing demo account.
-    putenv('ADMIN_BOOTSTRAP_PASSWORD=RotatedAdmin123');
+    putenv('DEMO_ADMIN_PASSWORD=RotatedAdmin123');
     require dirname(__DIR__) . '/bin/setup.php';
 
     $rotatedHash = (string) $pdo->query(

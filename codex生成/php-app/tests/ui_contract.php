@@ -35,6 +35,7 @@ contractCheck(str_contains($render, 'dockerfilePath: ./Dockerfile.render')
     && preg_match('/key: DATABASE_URL\s*\n\s*#.*\n\s*#.*\n\s*sync: false/s', $render) === 1,
     'Render 使用正式 Dockerfile 並保留 Neon DATABASE_URL 為外部 Secret');
 contractCheck(str_contains($render, "key: AI_API_KEY\n        value: \"\""), 'Render 保留空白 AI_API_KEY 欄位');
+contractCheck(str_contains($render, "key: DEMO_ADMIN_PASSWORD\n        value: Admin12345"), 'Render 使用固定展示管理者密碼並讓啟動同步可重跑');
 contractCheck(str_contains($maintenance, 'bin/cleanup-expired.php')
     && str_contains($maintenance, 'pg_dump')
     && str_contains($maintenance, 'pg_restore')

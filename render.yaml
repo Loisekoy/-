@@ -23,7 +23,7 @@ services:
         sync: false
       - key: DEMO_BOOTSTRAP_PASSWORD
         value: Demo12345
-      - key: ADMIN_BOOTSTRAP_PASSWORD
+      - key: DEMO_ADMIN_PASSWORD
         value: Admin12345
       - key: AI_API_KEY
         value: ""

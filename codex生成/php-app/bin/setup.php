@@ -31,7 +31,7 @@ $goalCount = (int) $pdo->query('SELECT COUNT(*) FROM training_goals')->fetchColu
 if ($goalCount === 0) {
     Seeder::seed($pdo);
 }
-$adminPassword = Config::get('ADMIN_BOOTSTRAP_PASSWORD', 'Admin12345') ?? '';
+$adminPassword = Config::get('DEMO_ADMIN_PASSWORD', 'Admin12345') ?? 'Admin12345';
 if (strlen($adminPassword) < 8) {
     throw new RuntimeException('管理員初始密碼至少需要 8 個字元。');
 }
