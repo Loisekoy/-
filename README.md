@@ -9,7 +9,7 @@
 - 資料庫系統頁：登入管理者後選擇「管理 → 資料庫系統」
 - GitHub 部署分支：`codex/fitness-tracking-system`
 
-課堂展示管理者帳號只供 Render 公開展示流程使用；為避免憑證進入公開 GitHub，帳密不寫入本 README。請以 Render／網站目前顯示的管理者登入資訊為準，不可用於真實個資或正式營運。
+課堂展示管理者帳號只供 Render 公開展示流程使用；為避免憑證進入公開 GitHub，帳密不寫入本 README，也不會顯示在公開登入頁。管理者登入資訊請由專案維護者私下提供，不可用於真實個資或正式營運。
 
 ## 目前使用的架構
 
@@ -79,7 +79,7 @@ FITTRACK_TEST_DATABASE=1 DATABASE_URL='postgresql://.../fittrack_test' php tests
 ## 主要文件
 
 - `web/php-app/README.md`：目前 PHP 應用的完整啟動、資料庫與部署說明
-- `DATABASE_DESIGN.md`：資料庫設計與關聯
-- `docs/ARCHITECTURE.md`：系統架構
+- `web/php-app/database/postgres.sql`：正式 PostgreSQL Schema、Trigger 與外鍵
+- `web/docs/diagrams/architecture_v1_1.mmd`：系統架構圖原始檔
 - `web/docs/validation/`：驗收與實作狀態
 - `參考資料/Fitness_Tracking_Management_System_SRS_.md`：軟體需求規格書
