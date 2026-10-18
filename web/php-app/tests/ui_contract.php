@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__, 3);
 $app = (string) file_get_contents(__DIR__ . '/../public/assets/app.js');
+$index = (string) file_get_contents(__DIR__ . '/../public/index.php');
 $render = (string) file_get_contents($root . '/render.yaml');
 $maintenance = (string) file_get_contents($root . '/.github/workflows/fittrack-maintenance.yml');
 $mediaManifest = (string) file_get_contents(__DIR__ . '/../docs/validation/media-sha256.txt');
@@ -34,6 +35,9 @@ contractCheck(str_contains($app, 'data-action="toggle-user"')
 contractCheck(str_contains($app, "path === '/admin/login'")
     && str_contains($app, "path === '/admin'")
     && str_contains($app, "path === '/database'"), '公開 Demo 的管理者與資料庫連結可直接進入登入流程');
+contractCheck(str_contains($index, 'hash_file(\'sha256\', $path)')
+    && str_contains($index, '/assets/app.js?v=')
+    && str_contains($index, '/assets/app.css?v='), '前端資源使用內容版本號，避免部署後沿用舊快取');
 
 contractCheck(str_contains($render, 'dockerfilePath: ./Dockerfile.render')
     && preg_match('/key: DATABASE_URL\s*\n\s*#.*\n\s*#.*\n\s*sync: false/s', $render) === 1,

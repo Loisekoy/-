@@ -7,6 +7,13 @@ require dirname(__DIR__) . '/src/bootstrap.php';
 use FitTrack\Database;
 
 $driver = Database::driver();
+$assetVersion = static function (string $file): string {
+    $path = __DIR__ . '/assets/' . $file;
+    $hash = @hash_file('sha256', $path);
+    return $hash === false ? '1' : substr($hash, 0, 12);
+};
+$appCss = '/assets/app.css?v=' . rawurlencode($assetVersion('app.css'));
+$appJs = '/assets/app.js?v=' . rawurlencode($assetVersion('app.js'));
 ?>
 <!doctype html>
 <html lang="zh-Hant">
@@ -15,7 +22,7 @@ $driver = Database::driver();
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="以 PostgreSQL 為核心的健身課表與訓練紀錄系統">
     <title>FitTrack Pro - 健身紀錄管理系統</title>
-    <link rel="stylesheet" href="/assets/app.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($appCss, ENT_QUOTES, 'UTF-8') ?>">
 </head>
 <body data-db-driver="<?= htmlspecialchars($driver, ENT_QUOTES, 'UTF-8') ?>">
     <div id="app" aria-live="polite">
@@ -33,6 +40,6 @@ $driver = Database::driver();
         </footer>
     </div>
     <div id="toast-region" class="toast-region" aria-live="assertive"></div>
-    <script type="module" src="/assets/app.js"></script>
+    <script type="module" src="<?= htmlspecialchars($appJs, ENT_QUOTES, 'UTF-8') ?>"></script>
 </body>
 </html>
