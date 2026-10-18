@@ -6,6 +6,9 @@ require dirname(__DIR__) . '/src/bootstrap.php';
 
 use FitTrack\Database;
 
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+
 $driver = Database::driver();
 $assetVersion = static function (string $file): string {
     $path = __DIR__ . '/assets/' . $file;

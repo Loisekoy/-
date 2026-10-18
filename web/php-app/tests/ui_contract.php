@@ -37,7 +37,8 @@ contractCheck(str_contains($app, "path === '/admin/login'")
     && str_contains($app, "path === '/database'"), '公開 Demo 的管理者與資料庫連結可直接進入登入流程');
 contractCheck(str_contains($index, 'hash_file(\'sha256\', $path)')
     && str_contains($index, '/assets/app.js?v=')
-    && str_contains($index, '/assets/app.css?v='), '前端資源使用內容版本號，避免部署後沿用舊快取');
+    && str_contains($index, '/assets/app.css?v=')
+    && str_contains($index, "header('Cache-Control: no-store"), '前端資源使用內容版本號，避免部署後沿用舊快取');
 
 contractCheck(str_contains($render, 'dockerfilePath: ./Dockerfile.render')
     && preg_match('/key: DATABASE_URL\s*\n\s*#.*\n\s*#.*\n\s*sync: false/s', $render) === 1,
