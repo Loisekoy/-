@@ -123,8 +123,8 @@ DATABASE_URL='postgresql://.../fittrack_test' FITTRACK_TEST_DATABASE=1 php tests
 
 ## 部署環境變數
 
-必要值：`DATABASE_URL`、`SECRET_KEY`、`RATE_LIMIT_SECRET`、`DEMO_BOOTSTRAP_PASSWORD`、`DEMO_ADMIN_PASSWORD`。正式環境的 `DATABASE_URL` 必須使用 `sslmode=require`、`verify-ca` 或 `verify-full`；不加密的 PostgreSQL 連線會直接拒絕啟動。`TRUSTED_PROXY_IPS` 僅能列出自己控制的 Reverse Proxy；未設定時不信任 `X-Forwarded-For`。AI 相關變數為選填。
+必要值：`DATABASE_URL`、`SECRET_KEY`、`RATE_LIMIT_SECRET`、`DEMO_BOOTSTRAP_PASSWORD`。全新資料庫首次建立管理員時，才需要設定 `DEMO_ADMIN_PASSWORD`；已有管理員資料時可留白，啟動程序會保留資料庫原本的密碼，不會自行產生或替換密碼。正式環境的 `DATABASE_URL` 必須使用 `sslmode=require`、`verify-ca` 或 `verify-full`；不加密的 PostgreSQL 連線會直接拒絕啟動。`TRUSTED_PROXY_IPS` 僅能列出自己控制的 Reverse Proxy；未設定時不信任 `X-Forwarded-For`。AI 相關變數為選填。
 
-根目錄的 `render.yaml` 建立 Render Docker Web Service，並由 Render 產生 `SECRET_KEY`、`RATE_LIMIT_SECRET`。`DATABASE_URL` 與 `DEMO_ADMIN_PASSWORD` 使用 `sync: false`，由 Render Dashboard 安全設定，不會被 Blueprint 覆寫或寫入 Git。每次啟動仍會同步該管理員帳號的私密密碼。`AI_API_KEY`、`AI_MODEL` 預設保持空白，因此不會阻擋核心功能部署；要啟用 AI 規劃時，請在 Render 的 Environment 頁面同時填入這兩個值，金鑰不可寫進 Git。
+根目錄的 `render.yaml` 建立 Render Docker Web Service，並由 Render 產生 `SECRET_KEY`、`RATE_LIMIT_SECRET`。`DATABASE_URL` 與 `DEMO_ADMIN_PASSWORD` 使用 `sync: false`，由 Render Dashboard 安全設定，不會被 Blueprint 覆寫或寫入 Git。若資料庫已有管理員且 Render 沒有設定 `DEMO_ADMIN_PASSWORD`，每次啟動會保留原密碼；若要主動輪替密碼，才需私下填入該變數。`AI_API_KEY`、`AI_MODEL` 預設保持空白，因此不會阻擋核心功能部署；要啟用 AI 規劃時，請在 Render 的 Environment 頁面同時填入這兩個值，金鑰不可寫進 Git。
 
 本次 72 頁規格書的本機實作狀態請見 `../docs/validation/IMPLEMENTATION_STATUS_2026-10-14.md`；完整架構、ERD 與資料字典位於 `../output/specification/`。

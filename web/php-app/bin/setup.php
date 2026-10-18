@@ -35,17 +35,20 @@ $exerciseDescriptionUpdates = Seeder::syncBundledExerciseDescriptions($pdo);
 if ($exerciseDescriptionUpdates > 0) {
     fwrite(STDOUT, "Exercise instructions updated: {$exerciseDescriptionUpdates} Traditional Chinese versions.\n");
 }
-$adminPassword = Config::get('DEMO_ADMIN_PASSWORD');
-if ($adminPassword === null || strlen($adminPassword) < 8) {
-    throw new RuntimeException('請先在環境變數 DEMO_ADMIN_PASSWORD 設定至少 8 個字元的管理員密碼。');
-}
+$adminPassword = (string) (Config::get('DEMO_ADMIN_PASSWORD') ?? '');
 $adminAuthStatement = $pdo->prepare(
     "SELECT ua.user_id, ua.password_hash FROM user_auth ua "
     . "JOIN admins a ON a.user_id = ua.user_id WHERE ua.email = ?"
 );
 $adminAuthStatement->execute(['admin@fittrack.local']);
 $adminAuth = $adminAuthStatement->fetch(PDO::FETCH_ASSOC);
-if ($adminAuth !== false && !password_verify($adminPassword, (string) $adminAuth['password_hash'])) {
+if ($adminAuth === false && strlen($adminPassword) < 8) {
+    throw new RuntimeException('全新資料庫首次建立管理員時，請在環境變數 DEMO_ADMIN_PASSWORD 設定至少 8 個字元的管理員密碼。');
+}
+if ($adminAuth !== false && $adminPassword !== '' && strlen($adminPassword) < 8) {
+    throw new RuntimeException('若要更新既有管理員密碼，DEMO_ADMIN_PASSWORD 必須至少 8 個字元。');
+}
+if ($adminAuth !== false && $adminPassword !== '' && !password_verify($adminPassword, (string) $adminAuth['password_hash'])) {
     $pdo->prepare('UPDATE user_auth SET password_hash = ? WHERE user_id = ?')->execute([
         password_hash($adminPassword, PASSWORD_BCRYPT, ['cost' => 10]),
         (int) $adminAuth['user_id'],
@@ -132,4 +135,4 @@ if ($demoUserId > 0 && (int) $bodyRecordCount->fetchColumn() < 4) {
 
 echo "Database ready (" . Database::driver() . ").\n";
 echo "Demo member: demo@fittrack.local\n";
-echo "Admin credentials are configured privately through DEMO_ADMIN_PASSWORD.\n";
+echo "Admin credentials remain private; an existing admin password is preserved when DEMO_ADMIN_PASSWORD is not set.\n";
