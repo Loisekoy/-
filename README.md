@@ -1,6 +1,6 @@
 # FitTrack Pro｜健身紀錄管理系統
 
-這是依據 `參考資料/Fitness_Tracking_Management_System_SRS_.md` 實作的資料庫課程專案。Render 目前部署的是 `web/php-app` 這個 PHP 版本；根目錄的舊 `backend/` 與 `frontend/` 是早期原型，不是目前公開網站的啟動入口。
+這是依據 `參考資料/Fitness_Tracking_Management_System_SRS_.md` 實作的資料庫課程專案。Render 目前部署的是 `web/php-app` 這個正式 PHP 版本。
 
 ## 公開網站
 
@@ -80,6 +80,7 @@ FITTRACK_TEST_DATABASE=1 DATABASE_URL='postgresql://.../fittrack_test' php tests
 
 - `web/php-app/README.md`：目前 PHP 應用的完整啟動、資料庫與部署說明
 - `web/php-app/database/postgres.sql`：正式 PostgreSQL Schema、Trigger 與外鍵
+- `web/docs/SQL_QUERIES.md`：常用資料庫查詢範例
+- `web/docs/schema_manifest.json`：資料表與外鍵結構清單
 - `web/docs/diagrams/architecture_v1_1.mmd`：系統架構圖原始檔
-- `web/docs/validation/`：驗收與實作狀態
 - `參考資料/Fitness_Tracking_Management_System_SRS_.md`：軟體需求規格書
