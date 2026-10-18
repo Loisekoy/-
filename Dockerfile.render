@@ -17,7 +17,7 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
 
 WORKDIR /var/www/html
 
-COPY ["codex生成/php-app/", "/var/www/html/"]
+COPY ["web/php-app/", "/var/www/html/"]
 
 RUN mkdir -p storage public/media/exercises \
     && chown -R www-data:www-data storage public/media/exercises

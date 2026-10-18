@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2100" height="1480" viewBox="0 0 2100 1480" role="img" aria-labelledby="title desc">
+  <title id="title">帳號、使用者偏好與登入保護 ERD</title>
+  <desc id="desc">R01–R07｜Fitness Tracking Management System｜Schema v1.1</desc>
+  <defs>
+    <style>
+      text { font-family: "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; fill: #263442; }
+      .page-title { font-size: 34px; font-weight: 700; letter-spacing: 0.4px; }
+      .page-subtitle { font-size: 17px; fill: #64748b; }
+      .entity-title { font-size: 22px; font-weight: 700; fill: #ffffff; letter-spacing: 0.6px; }
+      .entity-subtitle { font-size: 14px; fill: #e2e8f0; }
+      .field { font-size: 17px; }
+      .field-muted { font-size: 16px; fill: #5c6b78; }
+      .key { font-family: Menlo, Consolas, monospace; font-size: 14px; font-weight: 700; }
+      .relation { fill: none; stroke: #526477; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); }
+      .relation-label { font-size: 15px; font-weight: 700; fill: #334155; }
+      .cardinality { font-family: Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; fill: #475569; }
+      .legend { font-size: 15px; fill: #5c6b78; }
+      .callout-title { font-size: 17px; font-weight: 700; fill: #334155; }
+      .callout-text { font-size: 15px; fill: #526477; }
+    </style>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#1e293b" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#526477"/>
+    </marker>
+  </defs>
+  <rect width="2100" height="1480" fill="#f8fafc"/>
+  <rect x="0" y="0" width="2100" height="10" fill="#334155"/>
+  <text x="80" y="68" class="page-title">帳號、使用者偏好與登入保護 ERD</text>
+  <text x="80" y="102" class="page-subtitle">R01–R07｜Fitness Tracking Management System｜Schema v1.1</text>
+  <line x1="80" y1="125" x2="2020" y2="125" stroke="#cbd5e1" stroke-width="1.5"/>
+
+  <path class="relation" d="M500 280 L760 520"/>
+  <g>
+    <rect x="590" y="376" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="620" y="398" text-anchor="middle" class="relation-label">R04</text>
+  </g>
+  <text x="510" y="268" class="cardinality">1</text>
+  <text x="720" y="505" class="cardinality">0..N</text>
+
+  <path class="relation" d="M1220 520 L1470 280"/>
+  <g>
+    <rect x="1310" y="376" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="1340" y="398" text-anchor="middle" class="relation-label">R01</text>
+  </g>
+  <text x="1230" y="505" class="cardinality">1</text>
+  <text x="1430" y="268" class="cardinality">1</text>
+
+  <path class="relation" d="M1680 430 L1680 500"/>
+  <g>
+    <rect x="1710" y="449" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="1740" y="471" text-anchor="middle" class="relation-label">R02</text>
+  </g>
+  <text x="1698" y="424" class="cardinality">1</text>
+  <text x="1698" y="514" class="cardinality">0..N</text>
+
+  <path class="relation" d="M1220 710 L1470 900"/>
+  <g>
+    <rect x="1320" y="786" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="1350" y="808" text-anchor="middle" class="relation-label">R03</text>
+  </g>
+  <text x="1230" y="727" class="cardinality">1</text>
+  <text x="1425" y="888" class="cardinality">0..1</text>
+
+  <path class="relation" d="M760 710 L500 1010"/>
+  <g>
+    <rect x="595" y="834" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="625" y="856" text-anchor="middle" class="relation-label">R05</text>
+  </g>
+  <text x="720" y="728" class="cardinality">1</text>
+  <text x="506" y="997" class="cardinality">0..N</text>
+
+  <path class="relation" d="M300 790 L300 910"/>
+  <g>
+    <rect x="325" y="834" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="355" y="856" text-anchor="middle" class="relation-label">R06</text>
+  </g>
+  <text x="318" y="805" class="cardinality">1</text>
+  <text x="318" y="900" class="cardinality">0..N</text>
+
+  <path class="relation" d="M990 810 L990 1020"/>
+  <g>
+    <rect x="1015" y="899" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="1045" y="921" text-anchor="middle" class="relation-label">R07</text>
+  </g>
+  <text x="1008" y="828" class="cardinality">1</text>
+  <text x="1008" y="1010" class="cardinality">0..N</text>
+  <g filter="url(#shadow)">
+    <rect x="100" y="160" width="400" height="240" rx="16" fill="#ffffff" stroke="#9dacbb" stroke-width="1.5"/>
+    <path d="M116 160 H484 Q500 160 500 176 V230 H100 V176 Q100 160 116 160 Z" fill="#53677b"/>
+    <text x="130" y="196" class="entity-title">TRAINING_GOALS</text>
+    <text x="130" y="222" class="entity-subtitle">訓練目標主檔</text>
+    <line x1="120" y1="249" x2="480" y2="249" stroke="#e2e8f0"/>
+    <text x="130" y="294" class="key" fill="#334155">PK</text><text x="205" y="294" class="field">training_goal_id</text>
+    <text x="130" y="333" class="key" fill="#7c5c42">UQ</text><text x="205" y="333" class="field">goal_name</text>
+    <text x="130" y="372" class="field-muted">description?</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="100" y="550" width="400" height="240" rx="16" fill="#ffffff" stroke="#9dacbb" stroke-width="1.5"/>
+    <path d="M116 550 H484 Q500 550 500 566 V620 H100 V566 Q100 550 116 550 Z" fill="#53677b"/>
+    <text x="130" y="586" class="entity-title">BODY_PARTS</text>
+    <text x="130" y="612" class="entity-subtitle">身體部位主檔</text>
+    <line x1="120" y1="639" x2="480" y2="639" stroke="#e2e8f0"/>
+    <text x="130" y="684" class="key" fill="#334155">PK</text><text x="205" y="684" class="field">body_part_id</text>
+    <text x="130" y="723" class="key" fill="#7c5c42">UQ</text><text x="205" y="723" class="field">body_part_name</text>
+    <text x="130" y="762" class="field-muted">description?</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="100" y="910" width="400" height="280" rx="16" fill="#ffffff" stroke="#899aaa" stroke-width="1.8"/>
+    <path d="M116 910 H484 Q500 910 500 926 V980 H100 V926 Q100 910 116 910 Z" fill="#465d72"/>
+    <text x="130" y="946" class="entity-title">USER_BODY_PARTS</text>
+    <text x="130" y="972" class="entity-subtitle">使用者 × 身體部位關聯表</text>
+    <line x1="120" y1="999" x2="480" y2="999" stroke="#e2e8f0"/>
+    <text x="130" y="1044" class="key" fill="#64748b">PK/FK</text><text x="205" y="1044" class="field">user_id</text>
+    <text x="130" y="1083" class="key" fill="#64748b">PK/FK</text><text x="205" y="1083" class="field">body_part_id</text>
+    <text x="130" y="1122" class="field">priority</text>
+    <text x="130" y="1161" class="key" fill="#7c5c42">UQ</text><text x="205" y="1161" class="field-muted">(user_id, priority)</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="760" y="430" width="460" height="380" rx="16" fill="#ffffff" stroke="#5e7388" stroke-width="2.2"/>
+    <path d="M776 430 H1204 Q1220 430 1220 446 V500 H760 V446 Q760 430 776 430 Z" fill="#2f4358"/>
+    <text x="790" y="466" class="entity-title">USERS</text>
+    <text x="790" y="492" class="entity-subtitle">核心使用者與訓練設定</text>
+    <line x1="780" y1="519" x2="1200" y2="519" stroke="#e2e8f0"/>
+    <text x="790" y="564" class="key" fill="#334155">PK</text><text x="865" y="564" class="field">user_id</text>
+    <text x="790" y="602.3333333333334" class="key" fill="#64748b">FK</text><text x="865" y="602.3333333333334" class="field">training_goal_id?</text>
+    <text x="790" y="640.6666666666666" class="field">name · gender? · age?</text>
+    <text x="790" y="679" class="field">height_cm? · training_experience?</text>
+    <text x="790" y="717.3333333333334" class="field">training_days_per_week?</text>
+    <text x="790" y="755.6666666666667" class="field">training_duration_minutes?</text>
+    <text x="790" y="794" class="field-muted">profile_completed_at? · created_at</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1470" y="140" width="420" height="290" rx="16" fill="#ffffff" stroke="#8c9baa" stroke-width="1.6"/>
+    <path d="M1486 140 H1874 Q1890 140 1890 156 V210 H1470 V156 Q1470 140 1486 140 Z" fill="#3f566c"/>
+    <text x="1500" y="176" class="entity-title">USER_AUTH</text>
+    <text x="1500" y="202" class="entity-subtitle">登入憑證與帳號狀態</text>
+    <line x1="1490" y1="229" x2="1870" y2="229" stroke="#e2e8f0"/>
+    <text x="1500" y="274" class="key" fill="#334155">PK</text><text x="1575" y="274" class="field">auth_id</text>
+    <text x="1500" y="302" class="key" fill="#64748b">FK/UQ</text><text x="1575" y="302" class="field">user_id</text>
+    <text x="1500" y="330" class="key" fill="#7c5c42">UQ</text><text x="1575" y="330" class="field">email</text>
+    <text x="1500" y="358" class="field">password_hash</text>
+    <text x="1500" y="386" class="field-muted">is_email_verified · is_active</text>
+    <text x="1500" y="414" class="field-muted">created_at</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1470" y="500" width="420" height="260" rx="16" fill="#ffffff" stroke="#8c9baa" stroke-width="1.6"/>
+    <path d="M1486 500 H1874 Q1890 500 1890 516 V570 H1470 V516 Q1470 500 1486 500 Z" fill="#3f566c"/>
+    <text x="1500" y="536" class="entity-title">USER_SESSIONS</text>
+    <text x="1500" y="562" class="entity-subtitle">JWT jti 白名單與撤銷紀錄</text>
+    <line x1="1490" y1="589" x2="1870" y2="589" stroke="#e2e8f0"/>
+    <text x="1500" y="634" class="key" fill="#334155">PK</text><text x="1575" y="634" class="field">user_session_id (UUID)</text>
+    <text x="1500" y="670.6666666666666" class="key" fill="#64748b">FK</text><text x="1575" y="670.6666666666666" class="field">auth_id</text>
+    <text x="1500" y="707.3333333333334" class="field">created_at · expires_at</text>
+    <text x="1500" y="744" class="field-muted">revoked_at?</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1470" y="830" width="420" height="210" rx="16" fill="#ffffff" stroke="#8c9baa" stroke-width="1.6"/>
+    <path d="M1486 830 H1874 Q1890 830 1890 846 V900 H1470 V846 Q1470 830 1486 830 Z" fill="#3f566c"/>
+    <text x="1500" y="866" class="entity-title">ADMINS</text>
+    <text x="1500" y="892" class="entity-subtitle">管理員資格（以資料庫為準）</text>
+    <line x1="1490" y1="919" x2="1870" y2="919" stroke="#e2e8f0"/>
+    <text x="1500" y="964" class="key" fill="#64748b">PK/FK</text><text x="1575" y="964" class="field">user_id</text>
+    <text x="1500" y="1003" class="field-muted">created_at</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="760" y="1020" width="460" height="280" rx="16" fill="#ffffff" stroke="#899aaa" stroke-width="1.8"/>
+    <path d="M776 1020 H1204 Q1220 1020 1220 1036 V1090 H760 V1036 Q760 1020 776 1020 Z" fill="#465d72"/>
+    <text x="790" y="1056" class="entity-title">BODY_RECORDS</text>
+    <text x="790" y="1082" class="entity-subtitle">每日體重歷史</text>
+    <line x1="780" y1="1109" x2="1200" y2="1109" stroke="#e2e8f0"/>
+    <text x="790" y="1154" class="key" fill="#334155">PK</text><text x="865" y="1154" class="field">body_record_id</text>
+    <text x="790" y="1186.5" class="key" fill="#64748b">FK</text><text x="865" y="1186.5" class="field">user_id</text>
+    <text x="790" y="1219" class="field">record_date · weight_kg</text>
+    <text x="790" y="1251.5" class="field-muted">notes?</text>
+    <text x="790" y="1284" class="key" fill="#7c5c42">UQ</text><text x="865" y="1284" class="field-muted">(user_id, record_date)</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1470" y="1110" width="420" height="250" rx="16" fill="#ffffff" stroke="#9aa7b4" stroke-width="1.5" stroke-dasharray="8 6"/>
+    <path d="M1486 1110 H1874 Q1890 1110 1890 1126 V1180 H1470 V1126 Q1470 1110 1486 1110 Z" fill="#697887"/>
+    <text x="1500" y="1146" class="entity-title">LOGIN_FAILURES</text>
+    <text x="1500" y="1172" class="entity-subtitle">跨 PHP Worker 的登入限流事件</text>
+    <line x1="1490" y1="1199" x2="1870" y2="1199" stroke="#e2e8f0"/>
+    <text x="1500" y="1244" class="key" fill="#334155">PK</text><text x="1575" y="1244" class="field">login_failure_id</text>
+    <text x="1500" y="1283" class="field">ip_hash · failed_at</text>
+    <text x="1500" y="1322" class="field-muted">獨立事件表：無外鍵（No FK）</text>
+  </g>
+  <line x1="80" y1="1422" x2="2020" y2="1422" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="80" y="1456" class="legend">PK：Primary Key　 FK：Foreign Key　 UQ：Unique　 ?：可為 NULL　 箭頭方向：父表 → 子表</text>
+  <text x="2020" y="1456" text-anchor="end" class="legend">R01–R07 與 SRS／DDL 一致；LOGIN_FAILURES 無外鍵</text>
+</svg>

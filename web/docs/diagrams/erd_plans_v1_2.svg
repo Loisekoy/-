@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2100" height="1500" viewBox="0 0 2100 1500" role="img" aria-labelledby="title desc">
+  <title id="title">課表、規劃輸入快照與動作處方 ERD</title>
+  <desc id="desc">R10–R18｜課表來源、規劃快照與每日動作</desc>
+  <defs>
+    <style>
+      text { font-family: "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; fill: #263442; }
+      .page-title { font-size: 34px; font-weight: 700; letter-spacing: 0.4px; }
+      .page-subtitle { font-size: 17px; fill: #64748b; }
+      .entity-title { font-size: 22px; font-weight: 700; fill: #ffffff; letter-spacing: 0.6px; }
+      .entity-subtitle { font-size: 14px; fill: #e2e8f0; }
+      .field { font-size: 17px; }
+      .field-muted { font-size: 16px; fill: #5c6b78; }
+      .key { font-family: Menlo, Consolas, monospace; font-size: 14px; font-weight: 700; }
+      .relation { fill: none; stroke: #526477; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); }
+      .relation-label { font-size: 15px; font-weight: 700; fill: #334155; }
+      .cardinality { font-family: Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; fill: #475569; }
+      .legend { font-size: 15px; fill: #5c6b78; }
+      .callout-title { font-size: 17px; font-weight: 700; fill: #334155; }
+      .callout-text { font-size: 15px; fill: #526477; }
+    </style>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#1e293b" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#526477"/>
+    </marker>
+  </defs>
+  <rect width="2100" height="1500" fill="#f8fafc"/>
+  <rect x="0" y="0" width="2100" height="10" fill="#334155"/>
+  <text x="80" y="68" class="page-title">課表、規劃輸入快照與動作處方 ERD</text>
+  <text x="80" y="102" class="page-subtitle">R10–R18｜課表來源、規劃快照與每日動作</text>
+  <line x1="80" y1="125" x2="2020" y2="125" stroke="#cbd5e1" stroke-width="1.5"/>
+
+  <path class="relation" d="M430 360 L540 360"/>
+  <g>
+    <rect x="455" y="344" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="485" y="366" text-anchor="middle" class="relation-label">R10</text>
+  </g>
+  <text x="440" y="345" class="cardinality">1</text>
+  <text x="500" y="345" class="cardinality">0..N</text>
+  <path class="relation" d="M1000 350 L1130 350"/>
+  <g>
+    <rect x="1035" y="334" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="1065" y="356" text-anchor="middle" class="relation-label">R12</text>
+  </g>
+  <text x="1010" y="335" class="cardinality">1</text>
+  <text x="1095" y="335" class="cardinality">1</text>
+  <path class="relation" d="M770 220 L770 170 L940 170 L940 220"/>
+  <g>
+    <rect x="825" y="154" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="855" y="176" text-anchor="middle" class="relation-label">R11</text>
+  </g>
+  <text x="735" y="208" class="cardinality">0..1</text>
+  <text x="948" y="208" class="cardinality">0..N</text>
+  <path class="relation" d="M1320 750 L1320 650"/>
+  <g>
+    <rect x="1350" y="684" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="1380" y="706" text-anchor="middle" class="relation-label">R13</text>
+  </g>
+  <text x="1338" y="766" class="cardinality">1</text>
+  <text x="1338" y="642" class="cardinality">0..N</text>
+  <path class="relation" d="M1580 650 L1580 1070"/>
+  <g>
+    <rect x="1610" y="844" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="1640" y="866" text-anchor="middle" class="relation-label">R14</text>
+  </g>
+  <text x="1598" y="668" class="cardinality">1</text>
+  <text x="1598" y="1060" class="cardinality">0..N</text>
+  <path class="relation" d="M1770 865 L1680 865 L1680 1195 L1650 1195"/>
+  <g>
+    <rect x="1685" y="1009" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="1715" y="1031" text-anchor="middle" class="relation-label">R15</text>
+  </g>
+  <text x="1780" y="850" class="cardinality">1</text>
+  <text x="1658" y="1180" class="cardinality">0..N</text>
+  <path class="relation" d="M770 550 L770 720"/>
+  <g>
+    <rect x="795" y="619" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="825" y="641" text-anchor="middle" class="relation-label">R16</text>
+  </g>
+  <text x="788" y="568" class="cardinality">1</text>
+  <text x="788" y="710" class="cardinality">0..N</text>
+  <path class="relation" d="M770 980 L770 1080"/>
+  <g>
+    <rect x="795" y="1014" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="825" y="1036" text-anchor="middle" class="relation-label">R17</text>
+  </g>
+  <text x="788" y="997" class="cardinality">1</text>
+  <text x="788" y="1070" class="cardinality">0..N</text>
+  <path class="relation" d="M440 1235 L540 1235"/>
+  <g>
+    <rect x="460" y="1219" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="490" y="1241" text-anchor="middle" class="relation-label">R18</text>
+  </g>
+  <text x="450" y="1220" class="cardinality">1</text>
+  <text x="500" y="1220" class="cardinality">0..N</text>
+  <g filter="url(#shadow)">
+    <rect x="70" y="250" width="360" height="220" rx="16" fill="#ffffff" stroke="#9dacbb" stroke-width="1.5"/>
+    <path d="M86 250 H414 Q430 250 430 266 V320 H70 V266 Q70 250 86 250 Z" fill="#53677b"/>
+    <text x="100" y="286" class="entity-title">USERS</text>
+    <text x="100" y="312" class="entity-subtitle">課表擁有者</text>
+    <line x1="90" y1="339" x2="410" y2="339" stroke="#e2e8f0"/>
+    <text x="100" y="384" class="key" fill="#334155">PK</text><text x="175" y="384" class="field">user_id</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="540" y="220" width="460" height="330" rx="16" fill="#ffffff" stroke="#5e7388" stroke-width="2.2"/>
+    <path d="M556 220 H984 Q1000 220 1000 236 V290 H540 V236 Q540 220 556 220 Z" fill="#2f4358"/>
+    <text x="570" y="256" class="entity-title">WORKOUT_PLANS</text>
+    <text x="570" y="282" class="entity-subtitle">可封存、可複製的課表主檔</text>
+    <line x1="560" y1="309" x2="980" y2="309" stroke="#e2e8f0"/>
+    <text x="570" y="354" class="key" fill="#334155">PK</text><text x="645" y="354" class="field">workout_plan_id</text>
+    <text x="570" y="393" class="key" fill="#64748b">FK</text><text x="645" y="393" class="field">user_id</text>
+    <text x="570" y="432" class="key" fill="#64748b">FK</text><text x="645" y="432" class="field">copied_from_plan_id?</text>
+    <text x="570" y="471" class="field">plan_name · published_at</text>
+    <text x="570" y="510" class="field-muted">archived_at? · created_at</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1130" y="170" width="520" height="480" rx="16" fill="#ffffff" stroke="#899aaa" stroke-width="1.8"/>
+    <path d="M1146 170 H1634 Q1650 170 1650 186 V240 H1130 V186 Q1130 170 1146 170 Z" fill="#465d72"/>
+    <text x="1160" y="206" class="entity-title">PLANNING_PROFILES</text>
+    <text x="1160" y="232" class="entity-subtitle">產生課表當下的使用者輸入快照</text>
+    <line x1="1150" y1="259" x2="1630" y2="259" stroke="#e2e8f0"/>
+    <text x="1160" y="304" class="key" fill="#64748b">PK/FK</text><text x="1235" y="304" class="field">workout_plan_id</text>
+    <text x="1160" y="343" class="key" fill="#64748b">FK</text><text x="1235" y="343" class="field">training_goal_id</text>
+    <text x="1160" y="382" class="field">age_snapshot · height_cm_snapshot</text>
+    <text x="1160" y="421" class="field">weight_kg_snapshot · weight_record_date</text>
+    <text x="1160" y="460" class="field">experience_snapshot</text>
+    <text x="1160" y="499" class="field">training_days_per_week · duration_minutes</text>
+    <text x="1160" y="538" class="field-muted">algorithm_version · captured_at</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1130" y="750" width="380" height="220" rx="16" fill="#ffffff" stroke="#9dacbb" stroke-width="1.5"/>
+    <path d="M1146 750 H1494 Q1510 750 1510 766 V820 H1130 V766 Q1130 750 1146 750 Z" fill="#53677b"/>
+    <text x="1160" y="786" class="entity-title">TRAINING_GOALS</text>
+    <text x="1160" y="812" class="entity-subtitle">規劃時目標來源</text>
+    <line x1="1150" y1="839" x2="1490" y2="839" stroke="#e2e8f0"/>
+    <text x="1160" y="884" class="key" fill="#334155">PK</text><text x="1235" y="884" class="field">training_goal_id</text>
+    <text x="1160" y="923" class="key" fill="#7c5c42">UQ</text><text x="1235" y="923" class="field">goal_name</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1720" y="750" width="320" height="230" rx="16" fill="#ffffff" stroke="#9dacbb" stroke-width="1.5"/>
+    <path d="M1736 750 H2024 Q2040 750 2040 766 V820 H1720 V766 Q1720 750 1736 750 Z" fill="#53677b"/>
+    <text x="1750" y="786" class="entity-title">BODY_PARTS</text>
+    <text x="1750" y="812" class="entity-subtitle">規劃偏好部位來源</text>
+    <line x1="1740" y1="839" x2="2020" y2="839" stroke="#e2e8f0"/>
+    <text x="1750" y="884" class="key" fill="#334155">PK</text><text x="1825" y="884" class="field">body_part_id</text>
+    <text x="1750" y="923" class="key" fill="#7c5c42">UQ</text><text x="1825" y="923" class="field">body_part_name</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1130" y="1070" width="520" height="280" rx="16" fill="#ffffff" stroke="#899aaa" stroke-width="1.8"/>
+    <path d="M1146 1070 H1634 Q1650 1070 1650 1086 V1140 H1130 V1086 Q1130 1070 1146 1070 Z" fill="#465d72"/>
+    <text x="1160" y="1106" class="entity-title">PLANNING_PROFILE_BODY_PARTS</text>
+    <text x="1160" y="1132" class="entity-subtitle">課表產生當下的重點部位快照</text>
+    <line x1="1150" y1="1159" x2="1630" y2="1159" stroke="#e2e8f0"/>
+    <text x="1160" y="1204" class="key" fill="#64748b">PK/FK</text><text x="1235" y="1204" class="field">workout_plan_id</text>
+    <text x="1160" y="1243" class="key" fill="#64748b">PK/FK</text><text x="1235" y="1243" class="field">body_part_id</text>
+    <text x="1160" y="1282" class="field">priority</text>
+    <text x="1160" y="1321" class="key" fill="#7c5c42">UQ</text><text x="1235" y="1321" class="field-muted">(workout_plan_id, priority)</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="540" y="720" width="460" height="260" rx="16" fill="#ffffff" stroke="#8c9baa" stroke-width="1.6"/>
+    <path d="M556 720 H984 Q1000 720 1000 736 V790 H540 V736 Q540 720 556 720 Z" fill="#3f566c"/>
+    <text x="570" y="756" class="entity-title">PLAN_DAYS</text>
+    <text x="570" y="782" class="entity-subtitle">課表中的訓練日</text>
+    <line x1="560" y1="809" x2="980" y2="809" stroke="#e2e8f0"/>
+    <text x="570" y="854" class="key" fill="#334155">PK</text><text x="645" y="854" class="field">plan_day_id</text>
+    <text x="570" y="890.6666666666666" class="key" fill="#64748b">FK</text><text x="645" y="890.6666666666666" class="field">workout_plan_id</text>
+    <text x="570" y="927.3333333333334" class="field">day_number · day_title</text>
+    <text x="570" y="964" class="key" fill="#7c5c42">UQ</text><text x="645" y="964" class="field-muted">(workout_plan_id, day_number)</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="540" y="1080" width="460" height="330" rx="16" fill="#ffffff" stroke="#899aaa" stroke-width="1.8"/>
+    <path d="M556 1080 H984 Q1000 1080 1000 1096 V1150 H540 V1096 Q540 1080 556 1080 Z" fill="#465d72"/>
+    <text x="570" y="1116" class="entity-title">PLAN_EXERCISES</text>
+    <text x="570" y="1142" class="entity-subtitle">每日動作與目標處方</text>
+    <line x1="560" y1="1169" x2="980" y2="1169" stroke="#e2e8f0"/>
+    <text x="570" y="1214" class="key" fill="#334155">PK</text><text x="645" y="1214" class="field">plan_exercise_id</text>
+    <text x="570" y="1250" class="key" fill="#64748b">FK</text><text x="645" y="1250" class="field">plan_day_id</text>
+    <text x="570" y="1286" class="key" fill="#64748b">FK</text><text x="645" y="1286" class="field">exercise_version_id</text>
+    <text x="570" y="1322" class="field">exercise_order · target_sets · target_reps</text>
+    <text x="570" y="1358" class="field">rest_seconds · target_weight_kg?</text>
+    <text x="570" y="1394" class="key" fill="#7c5c42">UQ</text><text x="645" y="1394" class="field-muted">(plan_day_id, exercise_order)</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="70" y="1100" width="370" height="270" rx="16" fill="#ffffff" stroke="#9dacbb" stroke-width="1.5"/>
+    <path d="M86 1100 H424 Q440 1100 440 1116 V1170 H70 V1116 Q70 1100 86 1100 Z" fill="#53677b"/>
+    <text x="100" y="1136" class="entity-title">EXERCISE_VERSIONS</text>
+    <text x="100" y="1162" class="entity-subtitle">課表引用固定動作版本</text>
+    <line x1="90" y1="1189" x2="420" y2="1189" stroke="#e2e8f0"/>
+    <text x="100" y="1234" class="key" fill="#334155">PK</text><text x="175" y="1234" class="field">exercise_version_id</text>
+    <text x="100" y="1273" class="key" fill="#64748b">FK</text><text x="175" y="1273" class="field">exercise_id</text>
+    <text x="100" y="1312" class="field">version_no · exercise_name</text>
+  </g>
+  <line x1="80" y1="1442" x2="2020" y2="1442" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="80" y="1476" class="legend">PK：Primary Key　 FK：Foreign Key　 UQ：Unique　 ?：可為 NULL　 箭頭方向：父表 → 子表</text>
+  <text x="2020" y="1476" text-anchor="end" class="legend">R10–R18；規劃快照與課表動作均保留產生當下資訊</text>
+</svg>

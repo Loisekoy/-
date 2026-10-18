@@ -73,8 +73,8 @@ jobs:
             --volume "$RUNNER_TEMP/fittrack-backup:/backup" \
             --entrypoint php fittrack-acceptance \
             bin/database-manifest.php --write /backup/database-manifest.json
-          php codex生成/php-app/bin/verify-media-manifest.php
-          cp codex生成/php-app/docs/validation/media-sha256.txt "$RUNNER_TEMP/fittrack-backup/"
+          php web/php-app/bin/verify-media-manifest.php
+          cp web/php-app/docs/validation/media-sha256.txt "$RUNNER_TEMP/fittrack-backup/"
 
       - name: Create PostgreSQL backup
         env:

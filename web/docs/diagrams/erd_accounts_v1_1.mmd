@@ -1,0 +1,13 @@
+erDiagram
+    USERS ||--|| USER_AUTH : R01
+    USER_AUTH ||--o{ USER_SESSIONS : R02
+    USERS ||--o| ADMINS : R03
+    TRAINING_GOALS ||--o{ USERS : R04
+    USERS ||--o{ USER_BODY_PARTS : R05
+    BODY_PARTS ||--o{ USER_BODY_PARTS : R06
+    USERS ||--o{ BODY_RECORDS : R07
+    LOGIN_FAILURES {
+        bigint login_failure_id PK
+        char ip_hash
+        timestamptz failed_at
+    }

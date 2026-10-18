@@ -85,7 +85,7 @@ jobs:
           docker run --rm --network host
           --volume "$RUNNER_TEMP/fittrack-load:/data:ro"
           --volume "$RUNNER_TEMP/fittrack-results:/results"
-          --volume "$PWD/codex生成/php-app/tests/load:/scripts:ro"
+          --volume "$PWD/web/php-app/tests/load:/scripts:ro"
           --env BASE_URL=http://127.0.0.1
           --env USERS_FILE=/data/users.json
           grafana/k6:0.54.0 run

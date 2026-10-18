@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2100" height="1500" viewBox="0 0 2100 1500" role="img" aria-labelledby="title desc">
+  <title id="title">運動場次、來源快照與實際組數 ERD</title>
+  <desc id="desc">R19–R25｜開始運動、場次快照、逐組寫入與歷史保留</desc>
+  <defs>
+    <style>
+      text { font-family: "SF Pro Text", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; fill: #263442; }
+      .page-title { font-size: 34px; font-weight: 700; letter-spacing: 0.4px; }
+      .page-subtitle { font-size: 17px; fill: #64748b; }
+      .entity-title { font-size: 22px; font-weight: 700; fill: #ffffff; letter-spacing: 0.6px; }
+      .entity-subtitle { font-size: 14px; fill: #e2e8f0; }
+      .field { font-size: 17px; }
+      .field-muted { font-size: 16px; fill: #5c6b78; }
+      .key { font-family: Menlo, Consolas, monospace; font-size: 14px; font-weight: 700; }
+      .relation { fill: none; stroke: #526477; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); }
+      .relation-label { font-size: 15px; font-weight: 700; fill: #334155; }
+      .cardinality { font-family: Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; fill: #475569; }
+      .legend { font-size: 15px; fill: #5c6b78; }
+      .callout-title { font-size: 17px; font-weight: 700; fill: #334155; }
+      .callout-text { font-size: 15px; fill: #526477; }
+    </style>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#1e293b" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#526477"/>
+    </marker>
+  </defs>
+  <rect width="2100" height="1500" fill="#f8fafc"/>
+  <rect x="0" y="0" width="2100" height="10" fill="#334155"/>
+  <text x="80" y="68" class="page-title">運動場次、來源快照與實際組數 ERD</text>
+  <text x="80" y="102" class="page-subtitle">R19–R25｜開始運動、場次快照、逐組寫入與歷史保留</text>
+  <line x1="80" y1="125" x2="2020" y2="125" stroke="#cbd5e1" stroke-width="1.5"/>
+
+  <path class="relation" d="M430 340 L600 340"/>
+  <g>
+    <rect x="485" y="324" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="515" y="346" text-anchor="middle" class="relation-label">R19</text>
+  </g>
+  <text x="440" y="325" class="cardinality">1</text>
+  <text x="560" y="325" class="cardinality">0..N</text>
+  <path class="relation" d="M1080 340 L1240 340"/>
+  <g>
+    <rect x="1130" y="324" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="1160" y="346" text-anchor="middle" class="relation-label">R20</text>
+  </g>
+  <text x="1090" y="325" class="cardinality">1</text>
+  <text x="1200" y="325" class="cardinality">1</text>
+  <path class="relation" d="M1920 340 L1700 340"/>
+  <g>
+    <rect x="1780" y="324" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="1810" y="346" text-anchor="middle" class="relation-label">R21</text>
+  </g>
+  <text x="1880" y="325" class="cardinality">1</text>
+  <text x="1710" y="325" class="cardinality">0..N</text>
+  <path class="relation" d="M840 540 L840 700"/>
+  <g>
+    <rect x="865" y="604" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="895" y="626" text-anchor="middle" class="relation-label">R22</text>
+  </g>
+  <text x="858" y="558" class="cardinality">1</text>
+  <text x="858" y="690" class="cardinality">1..N</text>
+  <path class="relation" d="M460 900 L690 900"/>
+  <g>
+    <rect x="545" y="884" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="575" y="906" text-anchor="middle" class="relation-label">R23</text>
+  </g>
+  <text x="470" y="885" class="cardinality">1</text>
+  <text x="650" y="885" class="cardinality">0..N</text>
+  <path class="relation" d="M1680 900 L1190 900"/>
+  <g>
+    <rect x="1405" y="884" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="1435" y="906" text-anchor="middle" class="relation-label">R24</text>
+  </g>
+  <text x="1640" y="885" class="cardinality">1</text>
+  <text x="1200" y="885" class="cardinality">0..N</text>
+  <path class="relation" d="M940 1080 L940 1180"/>
+  <g>
+    <rect x="965" y="1114" width="60" height="31" rx="15.5" fill="#ffffff" stroke="#aab7c4"/>
+    <text x="995" y="1136" text-anchor="middle" class="relation-label">R25</text>
+  </g>
+  <text x="958" y="1098" class="cardinality">1</text>
+  <text x="958" y="1170" class="cardinality">0..N</text>
+  <g filter="url(#shadow)">
+    <rect x="70" y="240" width="360" height="220" rx="16" fill="#ffffff" stroke="#9dacbb" stroke-width="1.5"/>
+    <path d="M86 240 H414 Q430 240 430 256 V310 H70 V256 Q70 240 86 240 Z" fill="#53677b"/>
+    <text x="100" y="276" class="entity-title">USERS</text>
+    <text x="100" y="302" class="entity-subtitle">訓練場次擁有者</text>
+    <line x1="90" y1="329" x2="410" y2="329" stroke="#e2e8f0"/>
+    <text x="100" y="374" class="key" fill="#334155">PK</text><text x="175" y="374" class="field">user_id</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="600" y="190" width="480" height="350" rx="16" fill="#ffffff" stroke="#5e7388" stroke-width="2.2"/>
+    <path d="M616 190 H1064 Q1080 190 1080 206 V260 H600 V206 Q600 190 616 190 Z" fill="#2f4358"/>
+    <text x="630" y="226" class="entity-title">WORKOUT_SESSIONS</text>
+    <text x="630" y="252" class="entity-subtitle">一次實際訓練的生命週期</text>
+    <line x1="620" y1="279" x2="1060" y2="279" stroke="#e2e8f0"/>
+    <text x="630" y="324" class="key" fill="#334155">PK</text><text x="705" y="324" class="field">workout_session_id</text>
+    <text x="630" y="363" class="key" fill="#64748b">FK</text><text x="705" y="363" class="field">user_id</text>
+    <text x="630" y="402" class="field">status · started_at · ended_at?</text>
+    <text x="630" y="441" class="field-muted">notes?</text>
+    <text x="630" y="480" class="key" fill="#7c5c42">UQ</text><text x="705" y="480" class="field-muted">每位使用者僅一筆 in_progress</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1240" y="220" width="460" height="260" rx="16" fill="#ffffff" stroke="#899aaa" stroke-width="1.8"/>
+    <path d="M1256 220 H1684 Q1700 220 1700 236 V290 H1240 V236 Q1240 220 1256 220 Z" fill="#465d72"/>
+    <text x="1270" y="256" class="entity-title">WORKOUT_SESSION_PLANS</text>
+    <text x="1270" y="282" class="entity-subtitle">場次來源課表日</text>
+    <line x1="1260" y1="309" x2="1680" y2="309" stroke="#e2e8f0"/>
+    <text x="1270" y="354" class="key" fill="#64748b">PK/FK</text><text x="1345" y="354" class="field">workout_session_id</text>
+    <text x="1270" y="393" class="key" fill="#64748b">FK</text><text x="1345" y="393" class="field">plan_day_id</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1780" y="240" width="300" height="220" rx="16" fill="#ffffff" stroke="#9dacbb" stroke-width="1.5"/>
+    <path d="M1796 240 H2064 Q2080 240 2080 256 V310 H1780 V256 Q1780 240 1796 240 Z" fill="#53677b"/>
+    <text x="1810" y="276" class="entity-title">PLAN_DAYS</text>
+    <text x="1810" y="302" class="entity-subtitle">來源課表日</text>
+    <line x1="1800" y1="329" x2="2060" y2="329" stroke="#e2e8f0"/>
+    <text x="1810" y="374" class="key" fill="#334155">PK</text><text x="1885" y="374" class="field">plan_day_id</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="70" y="780" width="390" height="250" rx="16" fill="#ffffff" stroke="#9dacbb" stroke-width="1.5"/>
+    <path d="M86 780 H444 Q460 780 460 796 V850 H70 V796 Q70 780 86 780 Z" fill="#53677b"/>
+    <text x="100" y="816" class="entity-title">PLAN_EXERCISES</text>
+    <text x="100" y="842" class="entity-subtitle">來源課表動作</text>
+    <line x1="90" y1="869" x2="440" y2="869" stroke="#e2e8f0"/>
+    <text x="100" y="914" class="key" fill="#334155">PK</text><text x="175" y="914" class="field">plan_exercise_id</text>
+    <text x="100" y="953" class="key" fill="#64748b">FK</text><text x="175" y="953" class="field">exercise_version_id</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="690" y="700" width="500" height="380" rx="16" fill="#ffffff" stroke="#899aaa" stroke-width="1.8"/>
+    <path d="M706 700 H1174 Q1190 700 1190 716 V770 H690 V716 Q690 700 706 700 Z" fill="#465d72"/>
+    <text x="720" y="736" class="entity-title">WORKOUT_SESSION_EXERCISES</text>
+    <text x="720" y="762" class="entity-subtitle">開始運動時建立的場次動作快照</text>
+    <line x1="710" y1="789" x2="1170" y2="789" stroke="#e2e8f0"/>
+    <text x="720" y="834" class="key" fill="#334155">PK</text><text x="795" y="834" class="field">workout_session_exercise_id</text>
+    <text x="720" y="872.3333333333334" class="key" fill="#64748b">FK</text><text x="795" y="872.3333333333334" class="field">workout_session_id</text>
+    <text x="720" y="910.6666666666666" class="key" fill="#64748b">FK</text><text x="795" y="910.6666666666666" class="field">plan_exercise_id</text>
+    <text x="720" y="949" class="key" fill="#64748b">FK</text><text x="795" y="949" class="field">exercise_version_id</text>
+    <text x="720" y="987.3333333333334" class="field">exercise_order · target_sets · target_reps</text>
+    <text x="720" y="1025.6666666666667" class="field">rest_seconds · target_weight_kg?</text>
+    <text x="720" y="1064" class="field-muted">created_at</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="1680" y="780" width="400" height="250" rx="16" fill="#ffffff" stroke="#9dacbb" stroke-width="1.5"/>
+    <path d="M1696 780 H2064 Q2080 780 2080 796 V850 H1680 V796 Q1680 780 1696 780 Z" fill="#53677b"/>
+    <text x="1710" y="816" class="entity-title">EXERCISE_VERSIONS</text>
+    <text x="1710" y="842" class="entity-subtitle">場次固定引用的動作版本</text>
+    <line x1="1700" y1="869" x2="2060" y2="869" stroke="#e2e8f0"/>
+    <text x="1710" y="914" class="key" fill="#334155">PK</text><text x="1785" y="914" class="field">exercise_version_id</text>
+    <text x="1710" y="953" class="key" fill="#64748b">FK</text><text x="1785" y="953" class="field">exercise_id</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="690" y="1180" width="500" height="250" rx="16" fill="#ffffff" stroke="#5e7388" stroke-width="2.2"/>
+    <path d="M706 1180 H1174 Q1190 1180 1190 1196 V1250 H690 V1196 Q690 1180 706 1180 Z" fill="#2f4358"/>
+    <text x="720" y="1216" class="entity-title">WORKOUT_SETS</text>
+    <text x="720" y="1242" class="entity-subtitle">每完成一組立即寫入</text>
+    <line x1="710" y1="1269" x2="1170" y2="1269" stroke="#e2e8f0"/>
+    <text x="720" y="1314" class="key" fill="#334155">PK</text><text x="795" y="1314" class="field">workout_set_id</text>
+    <text x="720" y="1347.3333333333333" class="key" fill="#64748b">FK</text><text x="795" y="1347.3333333333333" class="field">workout_session_exercise_id</text>
+    <text x="720" y="1380.6666666666667" class="field">set_number · weight_kg · reps</text>
+    <text x="720" y="1414" class="key" fill="#7c5c42">UQ</text><text x="795" y="1414" class="field-muted">(session_exercise_id, set_number)</text>
+  </g>
+  <g>
+    <rect x="1320" y="1160" width="700" height="112" rx="12" fill="#eef2f6" stroke="#cbd5e1"/>
+    <text x="1344" y="1194" class="callout-title">歷史不受後續修改影響</text>
+    <text x="1344" y="1228" class="callout-text">場次引用固定 exercise_version_id，並保存當場目標處方。</text>
+    <text x="1344" y="1256" class="callout-text">完成場次至少一組；來源課表刪改不會改寫既有歷史。</text>
+  </g>
+  <line x1="80" y1="1442" x2="2020" y2="1442" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="80" y="1476" class="legend">PK：Primary Key　 FK：Foreign Key　 UQ：Unique　 ?：可為 NULL　 箭頭方向：父表 → 子表</text>
+  <text x="2020" y="1476" text-anchor="end" class="legend">R19–R25；場次快照與逐組紀錄形成完整歷史鏈</text>
+</svg>

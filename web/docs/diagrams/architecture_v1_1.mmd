@@ -1,0 +1,10 @@
+flowchart LR
+    U["使用者瀏覽器<br/>HTML / CSS / JavaScript"]
+    S["同源 PHP 8.4 應用<br/>REST API / 驗證 / 授權 / 排課"]
+    DB[("PostgreSQL 16<br/>20 tables / 25 FKs")]
+    C["Render Cron<br/>03:00 Asia/Taipei"]
+    AI["OpenAI-compatible API<br/>選用；金鑰僅在伺服器"]
+    U -->|"HTTPS + HttpOnly Cookie + CSRF"| S
+    S -->|"PDO / prepared SQL / transaction"| DB
+    S -. "optional" .-> AI
+    C -->|"cleanup-expired.php"| DB

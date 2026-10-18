@@ -1,0 +1,18 @@
+erDiagram
+    BODY_PARTS ||--o{ EXERCISES : R08
+    EXERCISES ||--o{ EXERCISE_VERSIONS : R09
+    EXERCISES {
+        int exercise_id PK
+        int body_part_id FK
+        boolean is_active
+    }
+    EXERCISE_VERSIONS {
+        int exercise_version_id PK
+        int exercise_id FK
+        int version_no UK
+        varchar exercise_name
+        varchar difficulty_level
+        varchar equipment
+        text description
+        text image_url
+    }
