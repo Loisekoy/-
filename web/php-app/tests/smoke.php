@@ -6,6 +6,7 @@ $databasePath = sys_get_temp_dir() . '/fittrack-smoke-' . bin2hex(random_bytes(6
 putenv('SQLITE_PATH=' . $databasePath);
 putenv('SECRET_KEY=smoke-test-key');
 putenv('RATE_LIMIT_SECRET=smoke-rate-limit-key');
+putenv('DEMO_ADMIN_PASSWORD=SmokeAdmin123');
 putenv('APP_ENV=development');
 
 require dirname(__DIR__) . '/src/bootstrap.php';
@@ -316,12 +317,29 @@ try {
     );
 
     $oldName = (string) $sessionExercise['exercise_name'];
-    $adminLogin = Auth::login($pdo, ['email' => 'admin@fittrack.local', 'password' => 'Admin12345']);
+    $adminLogin = Auth::login($pdo, ['email' => 'admin@fittrack.local', 'password' => (string) getenv('DEMO_ADMIN_PASSWORD')]);
     $adminToken = (string) $adminLogin['access_token'];
     $admin = Auth::user($pdo, $adminToken);
     check($admin['role'] === 'ADMIN', '管理員資格由 admins 資料表決定');
     $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . $adminToken;
     $adminApi = new Api($pdo, '203.0.113.8');
+    $updateAdminUser = new ReflectionMethod(Api::class, 'updateAdminUser');
+    $deactivatedUser = $updateAdminUser->invoke($adminApi, (int) $user['user_id'], ['is_active' => 0], $admin);
+    check((int) $deactivatedUser['is_active'] === 0, '管理員可以停用其他會員帳號');
+    try {
+        Auth::user($pdo, $token);
+        check(false, '被管理員停用的會員舊 Token 應立即失效');
+    } catch (ApiException $error) {
+        check($error->status === 401 && $error->errorCode === 'TOKEN_INVALID', '被管理員停用的會員舊 Token 立即失效');
+    }
+    $reactivatedUser = $updateAdminUser->invoke($adminApi, (int) $user['user_id'], ['is_active' => 1], $admin);
+    check((int) $reactivatedUser['is_active'] === 1, '管理員可以恢復其他會員帳號');
+    try {
+        $updateAdminUser->invoke($adminApi, (int) $admin['user_id'], ['is_active' => 0], $admin);
+        check(false, '管理員不應透過會員管理停用自己的帳號');
+    } catch (ApiException $error) {
+        check($error->status === 409 && $error->errorCode === 'CANNOT_CHANGE_SELF', '管理員不能透過會員管理停用自己的帳號');
+    }
     $updateExercise = new ReflectionMethod(Api::class, 'updateExercise');
     $newName = $oldName . '（新版）';
     $updatedExercise = $updateExercise->invoke($adminApi, (int) $sessionExercise['exercise_id'], [

@@ -161,6 +161,26 @@ final class ExerciseDatasetImporter
             throw new RuntimeException('動作資料集是空的。');
         }
 
+        // The bundled seed is the reviewed Traditional Chinese wording used
+        // by the deployed app. Reuse it when importing the original dataset,
+        // so a future media refresh does not reintroduce Simplified Chinese.
+        $bundledDescriptions = [];
+        $bundledPath = Config::root() . '/database/exercises-seed.json';
+        if (is_file($bundledPath)) {
+            $bundled = json_decode((string) file_get_contents($bundledPath), true);
+            if (is_array($bundled)) {
+                foreach ($bundled as $record) {
+                    if (!is_array($record)) {
+                        continue;
+                    }
+                    $name = (string) ($record['exercise_name'] ?? '');
+                    if (preg_match('/#([0-9]+)$/', $name, $matches)) {
+                        $bundledDescriptions[$matches[1]] = (string) ($record['description'] ?? '');
+                    }
+                }
+            }
+        }
+
         $seenIds = [];
         $partOrdinals = array_fill_keys(self::BODY_PARTS, 0);
         $normalized = [];
@@ -200,6 +220,9 @@ final class ExerciseDatasetImporter
                 array_keys($steps)
             ));
             $description .= "\n\n媒體來源：" . trim((string) ($source['attribution'] ?? 'Gym visual'));
+            if (isset($bundledDescriptions[$datasetId]) && $bundledDescriptions[$datasetId] !== '') {
+                $description = $bundledDescriptions[$datasetId];
+            }
 
             $normalized[] = [
                 '_dataset_id' => $datasetId,

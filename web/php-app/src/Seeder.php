@@ -53,6 +53,89 @@ final class Seeder
         self::seedDemoAccounts($pdo);
     }
 
+    /**
+     * Synchronise the bundled exercise instructions without mutating history.
+     *
+     * Exercise versions are intentionally immutable. When the bundled seed
+     * receives a wording correction (for example, Simplified to Traditional
+     * Chinese), create a new version so the library and new plans use the
+     * corrected text while existing workout snapshots remain reproducible.
+     */
+    public static function syncBundledExerciseDescriptions(PDO $pdo): int
+    {
+        $bundledPath = Config::root() . '/database/exercises-seed.json';
+        if (!is_file($bundledPath)) {
+            return 0;
+        }
+
+        $records = json_decode((string) file_get_contents($bundledPath), true);
+        if (!is_array($records) || $records === []) {
+            return 0;
+        }
+
+        $currentRows = $pdo->query(
+            'SELECT e.exercise_id, ev.version_no, ev.exercise_name, ev.difficulty_level, '
+            . 'ev.equipment, ev.description, ev.image_url '
+            . 'FROM exercises e JOIN exercise_versions ev ON ev.exercise_id = e.exercise_id '
+            . 'WHERE ev.version_no = ('
+            . 'SELECT MAX(v2.version_no) FROM exercise_versions v2 '
+            . 'WHERE v2.exercise_id = e.exercise_id)'
+        )->fetchAll();
+        $currentByName = [];
+        foreach ($currentRows as $row) {
+            $currentByName[(string) $row['exercise_name']] = $row;
+        }
+
+        $updates = [];
+        foreach ($records as $record) {
+            if (!is_array($record)) {
+                continue;
+            }
+            $name = trim((string) ($record['exercise_name'] ?? ''));
+            $description = (string) ($record['description'] ?? '');
+            if ($name === '' || $description === '' || !isset($currentByName[$name])) {
+                continue;
+            }
+            $current = $currentByName[$name];
+            if ((string) $current['description'] === $description) {
+                continue;
+            }
+            $updates[] = [
+                (int) $current['exercise_id'],
+                (int) $current['version_no'] + 1,
+                (string) $current['exercise_name'],
+                (string) $current['difficulty_level'],
+                $current['equipment'],
+                $description,
+                $current['image_url'],
+            ];
+        }
+
+        if ($updates === []) {
+            return 0;
+        }
+
+        Database::beginTransaction($pdo);
+        try {
+            $insert = $pdo->prepare(
+                'INSERT INTO exercise_versions '
+                . '(exercise_id, version_no, exercise_name, difficulty_level, equipment, description, image_url) '
+                . 'VALUES (?, ?, ?, ?, ?, ?, ?)'
+            );
+            foreach ($updates as $values) {
+                $insert->execute($values);
+            }
+            $pdo->commit();
+        } catch (\Throwable $error) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $error;
+        }
+
+        return count($updates);
+    }
+
     private static function seedExercises(PDO $pdo): void
     {
         $workspace = dirname(Config::root(), 2);
@@ -244,9 +327,9 @@ final class Seeder
         };
 
         $demoPassword = Config::get('DEMO_BOOTSTRAP_PASSWORD', 'Demo12345') ?? '';
-        $adminPassword = Config::get('DEMO_ADMIN_PASSWORD', 'Admin12345') ?? 'Admin12345';
-        if (strlen($demoPassword) < 8 || strlen($adminPassword) < 8) {
-            throw new \RuntimeException('示範會員與管理員初始密碼至少需要 8 個字元。');
+        $adminPassword = Config::get('DEMO_ADMIN_PASSWORD');
+        if (strlen($demoPassword) < 8 || $adminPassword === null || strlen($adminPassword) < 8) {
+            throw new \RuntimeException('示範會員密碼至少需要 8 個字元，且必須設定管理員環境變數 DEMO_ADMIN_PASSWORD。');
         }
 
         $demoUserId = $createUser('示範會員', 'demo@fittrack.local', $demoPassword, false);

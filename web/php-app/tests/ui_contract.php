@@ -27,6 +27,10 @@ contractCheck(str_contains($app, 'data-action="delete-plan"') && str_contains($a
 contractCheck(str_contains($app, 'aria-label="搜尋動作名稱或身體部位"')
     && str_contains($app, 'for="admin-exercise-name"')
     && str_contains($app, 'for="admin-exercise-description"'), '動作資料庫與管理表單具有可辨識欄位標籤');
+contractCheck(str_contains($app, 'data-action="toggle-user"')
+    && str_contains($app, '停用帳號')
+    && str_contains($app, '恢復帳號')
+    && str_contains($app, 'api(`/admin/users/${control.dataset.userId}`'), '管理員會員清單提供停用與恢復帳號操作');
 contractCheck(str_contains($app, "path === '/admin/login'")
     && str_contains($app, "path === '/admin'")
     && str_contains($app, "path === '/database'"), '公開 Demo 的管理者與資料庫連結可直接進入登入流程');
@@ -35,7 +39,8 @@ contractCheck(str_contains($render, 'dockerfilePath: ./Dockerfile.render')
     && preg_match('/key: DATABASE_URL\s*\n\s*#.*\n\s*#.*\n\s*sync: false/s', $render) === 1,
     'Render 使用正式 Dockerfile 並保留 Neon DATABASE_URL 為外部 Secret');
 contractCheck(str_contains($render, "key: AI_API_KEY\n        value: \"\""), 'Render 保留空白 AI_API_KEY 欄位');
-contractCheck(str_contains($render, "key: DEMO_ADMIN_PASSWORD\n        value: Admin12345"), 'Render 使用固定展示管理者密碼並讓啟動同步可重跑');
+contractCheck(preg_match('/key: DEMO_ADMIN_PASSWORD\s*\n\s*#.*\n\s*sync: false/s', $render) === 1
+    && !preg_match('/key: DEMO_ADMIN_PASSWORD\s*\n\s*value:\s*\S+/s', $render), 'Render 不把管理員密碼寫入 Git，改由 Dashboard Secret 提供');
 contractCheck(str_contains($maintenance, 'bin/cleanup-expired.php')
     && str_contains($maintenance, 'pg_dump')
     && str_contains($maintenance, 'pg_restore')

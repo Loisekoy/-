@@ -262,6 +262,10 @@ final class Api
             if ($method === 'GET' && $path === '/admin/users') {
                 return [200, $this->adminUsers()];
             }
+            if (preg_match('#^/admin/users/(\d+)$#', $path, $matches) && $method === 'PATCH') {
+                $this->assertAllowedFields($input, ['is_active']);
+                return [200, $this->updateAdminUser((int) $matches[1], $input, $user)];
+            }
             if ($method === 'GET' && $path === '/admin/exercises') {
                 return [200, $this->adminExercises()];
             }
@@ -1447,6 +1451,66 @@ final class Api
             . 'FROM users u JOIN user_auth ua ON ua.user_id = u.user_id '
             . 'LEFT JOIN admins a ON a.user_id = u.user_id ORDER BY u.created_at DESC'
         )->fetchAll()];
+    }
+
+    private function updateAdminUser(int $targetUserId, array $input, array $admin): array
+    {
+        if (!array_key_exists('is_active', $input)) {
+            throw new ApiException(422, 'NO_FIELDS', '沒有可更新的欄位。');
+        }
+        $activeValue = $input['is_active'];
+        $isActive = is_bool($activeValue)
+            ? $activeValue
+            : (is_int($activeValue) && in_array($activeValue, [0, 1], true) ? (bool) $activeValue : null);
+        if ($isActive === null) {
+            throw new ApiException(422, 'INVALID_ACCOUNT_STATUS', '帳號狀態必須是啟用或停用。');
+        }
+        if ($targetUserId < 1 || $targetUserId === (int) ($admin['user_id'] ?? 0)) {
+            throw new ApiException(409, 'CANNOT_CHANGE_SELF', '管理員不能在這裡修改自己的帳號狀態。');
+        }
+
+        Database::beginTransaction($this->pdo);
+        try {
+            $lockSql = 'SELECT u.user_id, ua.auth_id FROM users u JOIN user_auth ua ON ua.user_id = u.user_id WHERE u.user_id = ?';
+            if (Database::driver() === 'pgsql') {
+                $lockSql .= ' FOR UPDATE';
+            }
+            $target = $this->pdo->prepare($lockSql);
+            $target->execute([$targetUserId]);
+            $row = $target->fetch();
+            if (!$row) {
+                throw new ApiException(404, 'USER_NOT_FOUND', '找不到這個使用者。');
+            }
+
+            $activeSql = $isActive ? 'TRUE' : 'FALSE';
+            $this->pdo->prepare("UPDATE user_auth SET is_active = {$activeSql} WHERE auth_id = ?")
+                ->execute([(int) $row['auth_id']]);
+            if (!$isActive) {
+                $this->pdo->prepare(
+                    'UPDATE user_sessions SET revoked_at = CURRENT_TIMESTAMP '
+                    . 'WHERE auth_id = ? AND revoked_at IS NULL'
+                )->execute([(int) $row['auth_id']]);
+            }
+            $this->pdo->commit();
+        } catch (\Throwable $error) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $error;
+        }
+
+        $statement = $this->pdo->prepare(
+            'SELECT u.user_id, u.name, ua.email, ua.is_active, u.created_at, '
+            . 'CASE WHEN a.user_id IS NULL THEN 0 ELSE 1 END AS is_admin '
+            . 'FROM users u JOIN user_auth ua ON ua.user_id = u.user_id '
+            . 'LEFT JOIN admins a ON a.user_id = u.user_id WHERE u.user_id = ?'
+        );
+        $statement->execute([$targetUserId]);
+        $updated = $statement->fetch();
+        if (!$updated) {
+            throw new ApiException(404, 'USER_NOT_FOUND', '找不到這個使用者。');
+        }
+        return $updated;
     }
 
     private function adminExercises(): array

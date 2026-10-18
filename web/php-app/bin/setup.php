@@ -31,9 +31,13 @@ $goalCount = (int) $pdo->query('SELECT COUNT(*) FROM training_goals')->fetchColu
 if ($goalCount === 0) {
     Seeder::seed($pdo);
 }
-$adminPassword = Config::get('DEMO_ADMIN_PASSWORD', 'Admin12345') ?? 'Admin12345';
-if (strlen($adminPassword) < 8) {
-    throw new RuntimeException('管理員初始密碼至少需要 8 個字元。');
+$exerciseDescriptionUpdates = Seeder::syncBundledExerciseDescriptions($pdo);
+if ($exerciseDescriptionUpdates > 0) {
+    fwrite(STDOUT, "Exercise instructions updated: {$exerciseDescriptionUpdates} Traditional Chinese versions.\n");
+}
+$adminPassword = Config::get('DEMO_ADMIN_PASSWORD');
+if ($adminPassword === null || strlen($adminPassword) < 8) {
+    throw new RuntimeException('請先在環境變數 DEMO_ADMIN_PASSWORD 設定至少 8 個字元的管理員密碼。');
 }
 $adminAuthStatement = $pdo->prepare(
     "SELECT ua.user_id, ua.password_hash FROM user_auth ua "
@@ -128,4 +132,4 @@ if ($demoUserId > 0 && (int) $bodyRecordCount->fetchColumn() < 4) {
 
 echo "Database ready (" . Database::driver() . ").\n";
 echo "Demo member: demo@fittrack.local\n";
-echo "Demo admin: admin@fittrack.local\n";
+echo "Admin credentials are configured privately through DEMO_ADMIN_PASSWORD.\n";

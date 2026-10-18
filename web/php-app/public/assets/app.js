@@ -256,7 +256,7 @@ function renderAuth(mode) {
                     </p>
                     <div class="demo-note">
                         示範會員：demo@fittrack.local / Demo12345<br>
-                        課堂展示管理員：admin@fittrack.local / Admin12345<br>
+                        管理員登入資訊由維護者私下提供，不會顯示在公開網站<br>
                         你也可以免費註冊自己的帳號
                     </div>
                 </div>
@@ -959,7 +959,14 @@ async function renderAdmin() {
         : state.adminTab === 'exercises'
         ? `${exerciseForm}
             <table class="data-table responsive"><thead><tr><th>ID</th><th>動作</th><th>部位</th><th>難度</th><th>器材</th><th>狀態</th><th>操作</th></tr></thead><tbody>${exercises.items.map((item) => `<tr><td data-label="ID">${item.exercise_id}</td><td data-label="動作">${escapeHtml(item.exercise_name)}</td><td data-label="部位">${escapeHtml(item.body_part_name)}</td><td data-label="難度">${escapeHtml(item.difficulty_level)}</td><td data-label="器材">${escapeHtml(item.equipment || '-')}</td><td data-label="狀態"><span class="status status-${Number(item.is_active) ? 'active' : 'inactive'}">${Number(item.is_active) ? '啟用' : '停用'}</span></td><td data-label="操作"><div class="form-actions" style="margin-top:0"><button class="button button-small" data-action="edit-exercise" data-exercise-id="${item.exercise_id}">編輯</button>${Number(item.is_active) ? `<button class="button button-small button-danger" data-action="delete-exercise" data-exercise-id="${item.exercise_id}">停用</button>` : `<button class="button button-small" data-action="toggle-exercise" data-exercise-id="${item.exercise_id}" data-active="1">啟用</button>`}</div></td></tr>`).join('')}</tbody></table>`
-        : `<table class="data-table responsive"><thead><tr><th>ID</th><th>姓名</th><th>Email</th><th>身份</th><th>帳號狀態</th><th>建立時間</th></tr></thead><tbody>${users.items.map((item) => `<tr><td data-label="ID">${item.user_id}</td><td data-label="姓名">${escapeHtml(item.name)}</td><td data-label="Email">${escapeHtml(item.email)}</td><td data-label="身份">${Number(item.is_admin) ? 'ADMIN' : 'USER'}</td><td data-label="狀態"><span class="status status-${Number(item.is_active) ? 'active' : 'inactive'}">${Number(item.is_active) ? '啟用' : '停用'}</span></td><td data-label="建立時間">${formatDateTime(item.created_at)}</td></tr>`).join('')}</tbody></table>`;
+        : `<table class="data-table responsive"><thead><tr><th>ID</th><th>姓名</th><th>Email</th><th>身份</th><th>帳號狀態</th><th>建立時間</th><th>操作</th></tr></thead><tbody>${users.items.map((item) => {
+            const isSelf = Number(item.user_id) === Number(state.me?.user_id);
+            const active = Number(item.is_active) === 1;
+            const action = isSelf
+                ? '<span class="section-copy">目前帳號</span>'
+                : `<button class="button button-small ${active ? 'button-danger' : ''}" data-action="toggle-user" data-user-id="${item.user_id}" data-active="${active ? 0 : 1}">${active ? '停用帳號' : '恢復帳號'}</button>`;
+            return `<tr><td data-label="ID">${item.user_id}</td><td data-label="姓名">${escapeHtml(item.name)}</td><td data-label="Email">${escapeHtml(item.email)}</td><td data-label="身份">${Number(item.is_admin) ? 'ADMIN' : 'USER'}</td><td data-label="狀態"><span class="status status-${active ? 'active' : 'inactive'}">${active ? '啟用' : '停用'}</span></td><td data-label="建立時間">${formatDateTime(item.created_at)}</td><td data-label="操作">${action}</td></tr>`;
+        }).join('')}</tbody></table>`;
     main.innerHTML = `
         <div class="page-shell">
             <div class="page-header"><div><h1 class="page-title zh">管理後台</h1><p class="page-subtitle">管理會員與動作主資料，並檢視正式資料庫的結構、關聯與即時資料。</p></div></div>
@@ -1316,6 +1323,18 @@ document.addEventListener('click', async (event) => {
             await renderAdmin();
         } else if (action === 'select-database-table') {
             state.adminSelectedTable = control.dataset.table;
+            await renderAdmin();
+        } else if (action === 'toggle-user') {
+            const isActive = Number(control.dataset.active) === 1;
+            const message = isActive
+                ? '確定恢復這個會員帳號？恢復後對方可以重新登入。'
+                : '確定停用這個會員帳號？停用後對方無法登入，現有登入狀態也會立即失效。';
+            if (!window.confirm(message)) return;
+            await api(`/admin/users/${control.dataset.userId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ is_active: isActive ? 1 : 0 }),
+            });
+            showToast(isActive ? '會員帳號已恢復啟用。' : '會員帳號已停用，現有登入狀態已失效。');
             await renderAdmin();
         } else if (action === 'toggle-exercise') {
             await api(`/admin/exercises/${control.dataset.exerciseId}`, {
