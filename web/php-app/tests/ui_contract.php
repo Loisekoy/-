@@ -9,6 +9,7 @@ $render = (string) file_get_contents($root . '/render.yaml');
 $maintenance = (string) file_get_contents($root . '/.github/workflows/fittrack-maintenance.yml');
 $loadWorkflow = (string) file_get_contents($root . '/.github/workflows/fittrack-load-acceptance.yml');
 $loadScript = (string) file_get_contents(__DIR__ . '/load/fittrack.js');
+$apache = (string) file_get_contents(__DIR__ . '/../docker/apache-fittrack.conf');
 $migrate = (string) file_get_contents(__DIR__ . '/../bin/migrate.php');
 $mediaManifest = (string) file_get_contents(__DIR__ . '/../docs/validation/media-sha256.txt');
 
@@ -73,5 +74,7 @@ contractCheck(str_contains($loadScript, 'noCookiesReset: true')
     && str_contains($loadWorkflow, '--env TRUSTED_PROXY_IPS=127.0.0.1')
     && str_contains($loadWorkflow, '--user "$(id -u):$(id -g)"'),
     '200 人驗收保留每位使用者 Cookie、分離登入 IP 並可寫出摘要');
+contractCheck(str_contains($apache, 'KeepAlive Off'),
+    'Apache 後端不讓閒置 Keep-Alive 連線佔滿 prefork 工作程序');
 $mediaLines = preg_grep('/^[a-f0-9]{64}  /', preg_split('/\R/', $mediaManifest) ?: []);
 contractCheck(count($mediaLines) >= 2600, '動作圖片 SHA-256 清單涵蓋完整資料集');
