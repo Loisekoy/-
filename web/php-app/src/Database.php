@@ -48,6 +48,7 @@ final class Database
                 urldecode($parts['pass'] ?? ''),
                 self::options()
             );
+            self::$pdo->exec('SET search_path TO public');
             self::$pdo->exec('SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED');
             self::$pdo->exec("SET TIME ZONE 'Asia/Taipei'");
         } elseif ($databaseUrl && str_starts_with($databaseUrl, 'pgsql:')) {
@@ -57,6 +58,7 @@ final class Database
                 Config::get('DB_PASSWORD', ''),
                 self::options()
             );
+            self::$pdo->exec('SET search_path TO public');
             self::$pdo->exec('SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED');
             self::$pdo->exec("SET TIME ZONE 'Asia/Taipei'");
         } else {
