@@ -48,7 +48,11 @@ $pdo->exec(
     . 'version VARCHAR(80) PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)'
 );
 $versionStatement = $pdo->prepare('SELECT 1 FROM schema_migrations WHERE version = ?');
-foreach (['20261016_acceptance_hardening', '20261022_srs_conformance'] as $migrationVersion) {
+foreach ([
+    '20261016_acceptance_hardening',
+    '20261022_srs_conformance',
+    '20261022_archive_neon_sample',
+] as $migrationVersion) {
     $versionStatement->execute([$migrationVersion]);
     if ($versionStatement->fetchColumn()) {
         fwrite(STDOUT, "Migration {$migrationVersion} already applied.\n");

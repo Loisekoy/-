@@ -7,6 +7,7 @@ $app = (string) file_get_contents(__DIR__ . '/../public/assets/app.js');
 $index = (string) file_get_contents(__DIR__ . '/../public/index.php');
 $render = (string) file_get_contents($root . '/render.yaml');
 $maintenance = (string) file_get_contents($root . '/.github/workflows/fittrack-maintenance.yml');
+$migrate = (string) file_get_contents(__DIR__ . '/../bin/migrate.php');
 $mediaManifest = (string) file_get_contents(__DIR__ . '/../docs/validation/media-sha256.txt');
 
 function contractCheck(bool $condition, string $message): void
@@ -57,6 +58,7 @@ contractCheck(str_contains($render, 'dockerfilePath: ./Dockerfile.render')
     'Render 使用正式 Dockerfile 並保留 Neon DATABASE_URL 為外部 Secret');
 contractCheck(str_contains($render, "key: AI_API_KEY\n        value: \"\""), 'Render 保留空白 AI_API_KEY 欄位');
 contractCheck(str_contains($render, "key: AI_FEATURE_ENABLED\n        value: \"false\""), '非規格核心的 AI 規劃預設停用');
+contractCheck(str_contains($migrate, '20261022_archive_neon_sample'), '部署會將 Neon 範例表移出正式 public schema 並保留內容');
 contractCheck(preg_match('/key: DEMO_ADMIN_PASSWORD\s*\n\s*#.*\n\s*sync: false/s', $render) === 1
     && !preg_match('/key: DEMO_ADMIN_PASSWORD\s*\n\s*value:\s*\S+/s', $render), 'Render 不把管理員密碼寫入 Git，改由 Dashboard Secret 提供');
 contractCheck(str_contains($maintenance, 'bin/cleanup-expired.php')
