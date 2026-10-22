@@ -41,6 +41,15 @@ jobs:
           test -n "$FITTRACK_DATABASE_URL"
           test "${#FITTRACK_BACKUP_KEY}" -ge 32
 
+      - name: Pin the application role to the public schema
+        env:
+          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_DIRECT_URL }}
+        run: >-
+          docker run --rm --network host postgres:18
+          psql "$FITTRACK_DATABASE_URL"
+          --set=ON_ERROR_STOP=1
+          --command="ALTER ROLE CURRENT_USER SET search_path TO public"
+
       - name: Check out deployed application branch
         uses: actions/checkout@v5
         with:
