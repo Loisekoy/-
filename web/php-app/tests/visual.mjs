@@ -174,6 +174,8 @@ for (const [name, route, authenticated] of [
     ['landing-desktop', 'home', false],
     ['dashboard-desktop', 'dashboard', true],
     ['plans-desktop', 'plans', true],
+    ['dashboard-mobile', 'dashboard', true],
+    ['plans-mobile', 'plans', true],
     ['workout-mobile', 'workout', true],
 ]) {
     fs.writeFileSync(path.join(outputDir, `${name}.html`), html(offlineScript(route, authenticated)));
@@ -207,10 +209,27 @@ async function capture(name, route, viewport, authenticated) {
         : appSource;
     await page.setContent(html(script), { waitUntil: 'networkidle' });
     await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(outputDir, `${name}.png`), fullPage: true });
+    await page.screenshot({
+        path: path.join(outputDir, `${name}.png`),
+        fullPage: viewport.width > 760,
+    });
     const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
     if (bodyWidth > viewport.width) {
         throw new Error(`${name} overflows horizontally: ${bodyWidth}px > ${viewport.width}px`);
+    }
+    if (authenticated && viewport.width <= 1100) {
+        const navigation = await page.evaluate(() => {
+            const element = document.querySelector('.main-nav');
+            const bounds = element?.getBoundingClientRect();
+            return bounds ? {
+                top: bounds.top,
+                bottom: bounds.bottom,
+                viewportHeight: window.innerHeight,
+            } : null;
+        });
+        if (!navigation || navigation.top < 0 || Math.abs(navigation.bottom - navigation.viewportHeight) > 1) {
+            throw new Error(`${name} bottom navigation is outside the mobile viewport`);
+        }
     }
     await page.close();
 }
@@ -218,7 +237,9 @@ async function capture(name, route, viewport, authenticated) {
 await capture('landing-desktop', 'home', { width: 1440, height: 900 }, false);
 await capture('dashboard-desktop', 'dashboard', { width: 1440, height: 1024 }, true);
 await capture('plans-desktop', 'plans', { width: 1440, height: 1024 }, true);
-await capture('workout-mobile', 'workout', { width: 390, height: 844 }, true);
+await capture('dashboard-mobile', 'dashboard', { width: 375, height: 812 }, true);
+await capture('plans-mobile', 'plans', { width: 375, height: 812 }, true);
+await capture('workout-mobile', 'workout', { width: 375, height: 812 }, true);
 
 await browser.close();
 console.log(`Visual screenshots written to ${outputDir}`);

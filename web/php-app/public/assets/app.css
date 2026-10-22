@@ -1963,13 +1963,20 @@ main {
 }
 
 @media (max-width: 1100px) {
+    .site-header {
+        /* A backdrop filter creates a containing block for fixed descendants.
+           Disable it while the primary navigation is docked to the viewport. */
+        backdrop-filter: none;
+    }
+
     .main-nav {
         position: fixed;
         right: 0;
         bottom: 0;
         left: 0;
         z-index: 30;
-        min-height: 66px;
+        min-height: calc(66px + env(safe-area-inset-bottom));
+        padding-bottom: env(safe-area-inset-bottom);
         border-top: 1px solid var(--line);
         background: #fff;
         box-shadow: 0 -10px 30px rgb(7 20 45 / 7%);
@@ -1992,7 +1999,7 @@ main {
     }
 
     .site-footer {
-        margin-bottom: 66px;
+        margin-bottom: calc(66px + env(safe-area-inset-bottom));
     }
 
     .exercise-grid {

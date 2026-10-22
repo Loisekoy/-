@@ -1124,6 +1124,7 @@ async function ensureSessionData() {
 }
 
 async function renderRoute() {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     state.route = currentRoute();
     if (state.route !== 'workout') stopWorkoutTimer();
     try {
