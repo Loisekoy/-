@@ -35,7 +35,7 @@ jobs:
     steps:
       - name: Check required secrets
         env:
-          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_URL }}
+          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_DIRECT_URL }}
           FITTRACK_BACKUP_KEY: ${{ secrets.FITTRACK_BACKUP_KEY }}
         run: |
           test -n "$FITTRACK_DATABASE_URL"
@@ -51,7 +51,7 @@ jobs:
 
       - name: Remove expired sessions and login failures
         env:
-          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_URL }}
+          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_DIRECT_URL }}
         run: >-
           docker run --rm --network host
           --env DATABASE_URL="$FITTRACK_DATABASE_URL"
@@ -62,7 +62,7 @@ jobs:
 
       - name: Create database and media manifests
         env:
-          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_URL }}
+          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_DIRECT_URL }}
         run: |
           mkdir -p "$RUNNER_TEMP/fittrack-backup"
           docker run --rm --network host \
@@ -78,7 +78,7 @@ jobs:
 
       - name: Create PostgreSQL backup
         env:
-          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_URL }}
+          FITTRACK_DATABASE_URL: ${{ secrets.FITTRACK_DATABASE_DIRECT_URL }}
         run: >-
           docker run --rm --network host
           --volume "$RUNNER_TEMP/fittrack-backup:/backup"

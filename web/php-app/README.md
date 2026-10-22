@@ -100,7 +100,7 @@ Migration 會依序執行 `database/migrations/20261006_teacher_review_v1_1.sql`
 3. 使用 `docs/validation/media-sha256.txt` 核對 2,648 個 JPG/GIF 檔案。圖片本體由 Git 的不可覆寫 commit 保留，每份資料庫備份同時收入對應 SHA-256 清單。
 4. 將資料庫、筆數 Manifest 與媒體雜湊清單以 AES-256-CBC + PBKDF2 加密，再上傳為保留 7 天的 Workflow Artifact。公開儲存庫不會上傳明文資料庫。
 
-排程需在 GitHub 設定兩個 Repository Secrets：`FITTRACK_DATABASE_URL`與至少 32 字元的 `FITTRACK_BACKUP_KEY`。排程檔必須存在預設分支；公開儲存庫 60 天沒有任何活動時，GitHub 可能自動停用排程，驗收前應於 Actions 頁面確認最近一次執行成功。
+排程需在 GitHub 設定兩個 Repository Secrets：Neon 非 pooler 的直接連線 `FITTRACK_DATABASE_DIRECT_URL`，以及至少 32 字元的 `FITTRACK_BACKUP_KEY`。`pg_dump` 不使用網站的 `-pooler` 連線。排程檔必須存在預設分支；公開儲存庫 60 天沒有任何活動時，GitHub 可能自動停用排程，驗收前應於 Actions 頁面確認最近一次執行成功。
 
 ## 測試
 
