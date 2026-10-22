@@ -1232,47 +1232,74 @@ final class Api
     {
         [$startDate, $endDate] = $this->dateRange();
         $statement = $this->pdo->prepare(
-            "SELECT ws.workout_session_id, ws.started_at, wset.workout_set_id, ev.exercise_id, "
-            . 'e.body_part_id, wset.weight_kg, wset.reps, ev.exercise_name, bp.body_part_name '
+            "SELECT ws.workout_session_id, ws.status, ws.started_at, ws.ended_at, ws.notes, "
+            . 'pd.day_title, wp.plan_name, ev.exercise_id, e.body_part_id, '
+            . 'ev.exercise_name, bp.body_part_name, COUNT(wset.workout_set_id) AS set_count, '
+            . 'COALESCE(SUM(wset.weight_kg * wset.reps), 0) AS total_volume, '
+            . 'COALESCE(SUM(wset.reps), 0) AS total_reps, '
+            . 'COALESCE(SUM(CASE WHEN wset.weight_kg = 0 THEN wset.reps ELSE 0 END), 0) AS bodyweight_reps '
             . 'FROM workout_sessions ws '
             . 'JOIN workout_session_exercises wse ON wse.workout_session_id = ws.workout_session_id '
             . 'JOIN workout_sets wset ON wset.workout_session_exercise_id = wse.workout_session_exercise_id '
             . 'JOIN exercise_versions ev ON ev.exercise_version_id = wse.exercise_version_id '
             . 'JOIN exercises e ON e.exercise_id = ev.exercise_id '
             . 'JOIN body_parts bp ON bp.body_part_id = e.body_part_id '
+            . 'LEFT JOIN workout_session_plans wsp ON wsp.workout_session_id = ws.workout_session_id '
+            . 'LEFT JOIN plan_days pd ON pd.plan_day_id = wsp.plan_day_id '
+            . 'LEFT JOIN workout_plans wp ON wp.workout_plan_id = pd.workout_plan_id '
             . "WHERE ws.user_id = ? AND ws.status = 'completed' AND "
             . $this->taipeiDateExpression('ws.started_at') . ' BETWEEN ? AND ? '
-            . 'ORDER BY ws.started_at, ws.workout_session_id, wset.workout_set_id'
+            . 'GROUP BY ws.workout_session_id, ws.status, ws.started_at, ws.ended_at, ws.notes, '
+            . 'pd.day_title, wp.plan_name, ev.exercise_id, e.body_part_id, ev.exercise_name, bp.body_part_name '
+            . 'ORDER BY ws.started_at, ws.workout_session_id, ev.exercise_id'
         );
         $statement->execute([$userId, $startDate, $endDate]);
         $rows = $statement->fetchAll();
-        $sessions = [];
+        $sessionSummaries = [];
+        $sessionWeeks = [];
         $weekly = [];
         $bodyParts = [];
         $exercises = [];
+        $totalSets = 0;
         $totalVolume = 0.0;
         $totalReps = 0;
         $bodyweightReps = 0;
         foreach ($rows as $row) {
-            $volume = (float) $row['weight_kg'] * (int) $row['reps'];
+            $sessionId = (int) $row['workout_session_id'];
+            $setCount = (int) $row['set_count'];
+            $volume = (float) $row['total_volume'];
+            $totalSets += $setCount;
             $totalVolume += $volume;
-            $totalReps += (int) $row['reps'];
-            if ((float) $row['weight_kg'] === 0.0) {
-                $bodyweightReps += (int) $row['reps'];
+            $totalReps += (int) $row['total_reps'];
+            $bodyweightReps += (int) $row['bodyweight_reps'];
+            if (!isset($sessionSummaries[$sessionId])) {
+                $sessionSummaries[$sessionId] = [
+                    'workout_session_id' => $sessionId,
+                    'status' => (string) $row['status'],
+                    'started_at' => (string) $row['started_at'],
+                    'ended_at' => $row['ended_at'],
+                    'notes' => $row['notes'],
+                    'day_title' => $row['day_title'],
+                    'plan_name' => $row['plan_name'],
+                    'set_count' => 0,
+                    'total_volume' => 0.0,
+                ];
+                $sessionWeeks[$sessionId] = $this->taipeiDateTime((string) $row['started_at'])
+                    ->modify('monday this week')->format('Y-m-d');
             }
-            $sessions[(int) $row['workout_session_id']] = true;
-            $startedAt = $this->taipeiDateTime((string) $row['started_at']);
-            $week = $startedAt->modify('monday this week')->format('Y-m-d');
+            $sessionSummaries[$sessionId]['set_count'] += $setCount;
+            $sessionSummaries[$sessionId]['total_volume'] += $volume;
+            $week = $sessionWeeks[$sessionId];
             $weekly[$week] ??= ['week' => $week, 'volume' => 0.0, 'sessions' => []];
             $weekly[$week]['volume'] += $volume;
-            $weekly[$week]['sessions'][(int) $row['workout_session_id']] = true;
+            $weekly[$week]['sessions'][$sessionId] = true;
             $bodyPartId = (int) $row['body_part_id'];
             $bodyParts[$bodyPartId] ??= [
                 'body_part_id' => $bodyPartId,
                 'body_part_name' => (string) $row['body_part_name'],
                 'completed_sets' => 0,
             ];
-            $bodyParts[$bodyPartId]['completed_sets']++;
+            $bodyParts[$bodyPartId]['completed_sets'] += $setCount;
             $exerciseId = (int) $row['exercise_id'];
             $exercises[$exerciseId] ??= [
                 'exercise_id' => $exerciseId,
@@ -1281,7 +1308,7 @@ final class Api
                 'completed_sets' => 0,
             ];
             $exercises[$exerciseId]['exercise_name'] = (string) $row['exercise_name'];
-            $exercises[$exerciseId]['completed_sets']++;
+            $exercises[$exerciseId]['completed_sets'] += $setCount;
         }
         $bodyPartRanking = array_values($bodyParts);
         usort($bodyPartRanking, static fn (array $a, array $b): int =>
@@ -1306,12 +1333,20 @@ final class Api
             static fn (array $row): float => (float) $row['weight_kg'],
             $weights
         )) / count($weights);
+        $recentWorkouts = array_values($sessionSummaries);
+        usort($recentWorkouts, static fn (array $a, array $b): int =>
+            strcmp((string) $b['started_at'], (string) $a['started_at'])
+                ?: (int) $b['workout_session_id'] <=> (int) $a['workout_session_id']);
+        foreach ($recentWorkouts as &$workout) {
+            $workout['total_volume'] = round((float) $workout['total_volume'], 2);
+        }
+        unset($workout);
         return [
             'start_date' => $startDate,
             'end_date' => $endDate,
-            'session_count' => count($sessions),
-            'set_count' => count($rows),
-            'completed_sets' => count($rows),
+            'session_count' => count($sessionSummaries),
+            'set_count' => $totalSets,
+            'completed_sets' => $totalSets,
             'total_volume' => round($totalVolume, 2),
             'weighted_volume' => round($totalVolume, 2),
             'external_load_volume_kg_reps' => round($totalVolume, 2),
@@ -1331,7 +1366,7 @@ final class Api
                 ],
                 $weights
             ),
-            'recent_workouts' => array_slice($this->history($userId, [$startDate, $endDate], true)['items'], 0, 5),
+            'recent_workouts' => array_slice($recentWorkouts, 0, 5),
         ];
     }
 
