@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 45
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_USER: fittrack
           POSTGRES_PASSWORD: fittrack-test-password
@@ -82,14 +82,14 @@ jobs:
         run: >-
           docker run --rm --network host
           --volume "$RUNNER_TEMP/fittrack-backup:/backup"
-          postgres:16 pg_dump "$FITTRACK_DATABASE_URL"
+          postgres:18 pg_dump "$FITTRACK_DATABASE_URL"
           --format=custom --no-owner --no-acl --file=/backup/database.dump
 
       - name: Restore into an independent PostgreSQL database
         run: |
           docker run --rm --network host \
             --volume "$RUNNER_TEMP/fittrack-backup:/backup" \
-            postgres:16 pg_restore \
+            postgres:18 pg_restore \
             --dbname=postgresql://fittrack:fittrack-test-password@127.0.0.1:5432/fittrack_restore \
             --no-owner --no-acl --exit-on-error /backup/database.dump
           docker run --rm --network host \
