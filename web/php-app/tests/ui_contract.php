@@ -7,6 +7,8 @@ $app = (string) file_get_contents(__DIR__ . '/../public/assets/app.js');
 $index = (string) file_get_contents(__DIR__ . '/../public/index.php');
 $render = (string) file_get_contents($root . '/render.yaml');
 $maintenance = (string) file_get_contents($root . '/.github/workflows/fittrack-maintenance.yml');
+$loadWorkflow = (string) file_get_contents($root . '/.github/workflows/fittrack-load-acceptance.yml');
+$loadScript = (string) file_get_contents(__DIR__ . '/load/fittrack.js');
 $migrate = (string) file_get_contents(__DIR__ . '/../bin/migrate.php');
 $mediaManifest = (string) file_get_contents(__DIR__ . '/../docs/validation/media-sha256.txt');
 
@@ -66,5 +68,10 @@ contractCheck(str_contains($maintenance, 'bin/cleanup-expired.php')
     && str_contains($maintenance, 'pg_restore')
     && str_contains($maintenance, 'cron: "0 19 * * *"')
     && str_contains($maintenance, 'retention-days: 7'), '每日清理、備份與獨立還原工作流程已定義');
+contractCheck(str_contains($loadScript, 'noCookiesReset: true')
+    && str_contains($loadScript, "'X-Forwarded-For': benchmarkIp()")
+    && str_contains($loadWorkflow, '--env TRUSTED_PROXY_IPS=127.0.0.1')
+    && str_contains($loadWorkflow, '--user "$(id -u):$(id -g)"'),
+    '200 人驗收保留每位使用者 Cookie、分離登入 IP 並可寫出摘要');
 $mediaLines = preg_grep('/^[a-f0-9]{64}  /', preg_split('/\R/', $mediaManifest) ?: []);
 contractCheck(count($mediaLines) >= 2600, '動作圖片 SHA-256 清單涵蓋完整資料集');

@@ -11,6 +11,7 @@ const planLatency = new Trend('fittrack_plan_latency', true);
 const unexpectedFailure = new Rate('fittrack_unexpected_failure');
 
 export const options = {
+  noCookiesReset: true,
   scenarios: {
     warmup: {
       executor: 'constant-vus',
@@ -42,12 +43,21 @@ function identity() {
   return fixture.load_users[(exec.vu.idInTest - 1) % fixture.load_users.length];
 }
 
+function benchmarkIp() {
+  const index = (exec.vu.idInTest - 1) % 200;
+  return `198.18.${Math.floor(index / 254)}.${(index % 254) + 1}`;
+}
+
 function login(user) {
   const response = http.post(`${baseUrl}/api/auth/login`, JSON.stringify({
     email: user.email,
     password: user.password,
   }), {
-    headers: { 'Content-Type': 'application/json', Origin: baseUrl },
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: baseUrl,
+      'X-Forwarded-For': benchmarkIp(),
+    },
     tags: { operation: 'login' },
   });
   const ok = check(response, { 'login returns 200': (result) => result.status === 200 });

@@ -74,6 +74,7 @@ jobs:
             --env APP_ENV=test \
             --env SECRET_KEY=acceptance-only-secret-key-with-32-bytes \
             --env RATE_LIMIT_SECRET=acceptance-only-rate-key-with-32-bytes \
+            --env TRUSTED_PROXY_IPS=127.0.0.1 \
             fittrack-acceptance
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1/api/health >/dev/null; then exit 0; fi
@@ -85,6 +86,7 @@ jobs:
       - name: Run 60-second warmup and 200-user five-minute acceptance test
         run: >-
           docker run --rm --network host
+          --user "$(id -u):$(id -g)"
           --volume "$RUNNER_TEMP/fittrack-load:/data:ro"
           --volume "$RUNNER_TEMP/fittrack-results:/results"
           --volume "$PWD/web/php-app/tests/load:/scripts:ro"
