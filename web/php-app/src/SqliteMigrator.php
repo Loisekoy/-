@@ -52,6 +52,7 @@ final class SqliteMigrator
             // process was waiting for the exclusive lock.
             if (self::hasTable($pdo, 'exercise_versions')) {
                 $pdo->exec('COMMIT');
+                $pdo->exec('PRAGMA foreign_keys = ON');
                 return false;
             }
 
@@ -231,7 +232,11 @@ final class SqliteMigrator
                 . 'target_sets, target_reps, rest_seconds, target_weight_kg) '
                 . 'SELECT plan_exercise_id, plan_day_id, exercise_id, exercise_order, '
                 . 'target_sets, target_reps, rest_seconds, NULL FROM legacy_plan_exercises',
-            'INSERT INTO workout_sessions SELECT * FROM legacy_workout_sessions',
+            'INSERT INTO workout_sessions '
+                . '(workout_session_id, user_id, status, started_at, ended_at, notes) '
+                . "SELECT workout_session_id, user_id, CASE WHEN status = 'completed' THEN 'in_progress' ELSE status END, "
+                . "started_at, CASE WHEN status = 'completed' THEN NULL ELSE ended_at END, notes "
+                . 'FROM legacy_workout_sessions',
             'INSERT INTO workout_session_plans SELECT * FROM legacy_workout_session_plans',
             'INSERT INTO workout_session_exercises '
                 . '(workout_session_id, plan_exercise_id, exercise_version_id, exercise_order, '
@@ -252,6 +257,11 @@ final class SqliteMigrator
                 . 'AND pe.exercise_id = old.exercise_id '
                 . 'JOIN workout_session_exercises wse ON wse.workout_session_id = old.workout_session_id '
                 . 'AND wse.plan_exercise_id = pe.plan_exercise_id',
+            "UPDATE workout_sessions SET status = 'completed', ended_at = ("
+                . 'SELECT legacy.ended_at FROM legacy_workout_sessions legacy '
+                . 'WHERE legacy.workout_session_id = workout_sessions.workout_session_id) '
+                . 'WHERE workout_session_id IN (SELECT workout_session_id FROM legacy_workout_sessions '
+                . "WHERE status = 'completed')",
         ];
 
         foreach ($statements as $statement) {

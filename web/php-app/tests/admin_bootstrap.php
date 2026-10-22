@@ -7,7 +7,7 @@ putenv('APP_ENV=test');
 putenv('SQLITE_PATH=' . $databasePath);
 putenv('SECRET_KEY=admin-bootstrap-test-secret');
 putenv('RATE_LIMIT_SECRET=admin-bootstrap-test-rate-secret');
-putenv('DEMO_BOOTSTRAP_PASSWORD=Demo12345');
+putenv('DEMO_BOOTSTRAP_PASSWORD=Demo123456');
 putenv('DEMO_ADMIN_PASSWORD=InitialAdmin123');
 
 require dirname(__DIR__) . '/src/bootstrap.php';

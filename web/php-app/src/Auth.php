@@ -11,9 +11,9 @@ final class Auth
 {
     public static function register(PDO $pdo, array $input): array
     {
-        $name = trim((string) ($input['name'] ?? ''));
-        $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
-        $password = (string) ($input['password'] ?? '');
+        $name = trim(self::stringField($input, 'name'));
+        $email = mb_strtolower(trim(self::stringField($input, 'email')));
+        $password = self::stringField($input, 'password');
 
         if (mb_strlen($name) < 1 || mb_strlen($name) > 100) {
             throw new ApiException(422, 'INVALID_NAME', '姓名需為 1 至 100 個字。');
@@ -22,7 +22,8 @@ final class Auth
             throw new ApiException(422, 'INVALID_EMAIL', 'Email 格式不正確。');
         }
         $length = strlen($password);
-        if ($length < 10 || $length > 72 || !preg_match('/[A-Za-z]/', $password) || !preg_match('/\d/', $password)) {
+        if ($length < 10 || $length > 72 || str_contains($password, "\0")
+            || !preg_match('/[A-Za-z]/', $password) || !preg_match('/\d/', $password)) {
             throw new ApiException(422, 'INVALID_PASSWORD', '密碼需為 10 至 72 bytes，且至少包含英文字母與數字。');
         }
 
@@ -50,15 +51,25 @@ final class Auth
             $pdo->commit();
             return $result;
         } catch (\Throwable $error) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            if ($error instanceof \PDOException && self::isUniqueViolation($error)) {
+                throw new ApiException(409, 'EMAIL_EXISTS', '這個 Email 已經註冊。');
+            }
             throw $error;
         }
     }
 
     public static function login(PDO $pdo, array $input): array
     {
-        $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
-        $password = (string) ($input['password'] ?? '');
+        $email = mb_strtolower(trim(self::stringField($input, 'email')));
+        $password = self::stringField($input, 'password');
+        if (str_contains($password, "\0")) {
+            throw new ApiException(422, 'INVALID_PASSWORD', '密碼不得包含 NUL。', [], [
+                'password' => '密碼不得包含 NUL。',
+            ]);
+        }
         $statement = $pdo->prepare(
             'SELECT ua.auth_id, ua.user_id, ua.email, ua.password_hash, ua.is_active, u.name, '
             . 'CASE WHEN a.user_id IS NULL THEN 0 ELSE 1 END AS is_admin '
@@ -124,8 +135,11 @@ final class Auth
 
     public static function changePassword(PDO $pdo, array $user, array $input): void
     {
-        $current = (string) ($input['current_password'] ?? '');
-        $new = (string) ($input['new_password'] ?? '');
+        $current = self::stringField($input, 'current_password');
+        $new = self::stringField($input, 'new_password');
+        if (str_contains($current, "\0")) {
+            throw new ApiException(422, 'INVALID_PASSWORD', '密碼不得包含 NUL。');
+        }
         $statement = $pdo->prepare(
             'SELECT password_hash FROM user_auth WHERE auth_id = ? AND user_id = ?'
         );
@@ -135,7 +149,8 @@ final class Auth
             throw new ApiException(401, 'INVALID_CURRENT_PASSWORD', '目前密碼不正確。');
         }
         $length = strlen($new);
-        if ($length < 10 || $length > 72 || !preg_match('/[A-Za-z]/', $new) || !preg_match('/\d/', $new)) {
+        if ($length < 10 || $length > 72 || str_contains($new, "\0")
+            || !preg_match('/[A-Za-z]/', $new) || !preg_match('/\d/', $new)) {
             throw new ApiException(422, 'INVALID_PASSWORD', '新密碼需為 10 至 72 bytes，且至少包含英文字母與數字。');
         }
 
@@ -151,14 +166,19 @@ final class Auth
             )->execute([(int) $user['auth_id']]);
             $pdo->commit();
         } catch (\Throwable $error) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             throw $error;
         }
     }
 
     public static function deactivate(PDO $pdo, array $user, array $input): void
     {
-        $current = (string) ($input['current_password'] ?? '');
+        $current = self::stringField($input, 'current_password');
+        if (str_contains($current, "\0")) {
+            throw new ApiException(422, 'INVALID_PASSWORD', '密碼不得包含 NUL。');
+        }
         $statement = $pdo->prepare(
             'SELECT password_hash FROM user_auth WHERE auth_id = ? AND user_id = ?'
         );
@@ -179,9 +199,29 @@ final class Auth
             )->execute([(int) $user['auth_id']]);
             $pdo->commit();
         } catch (\Throwable $error) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             throw $error;
         }
+    }
+
+    private static function isUniqueViolation(\PDOException $error): bool
+    {
+        $message = strtolower($error->getMessage());
+        return $error->getCode() === '23505'
+            || str_contains($message, 'unique constraint')
+            || str_contains($message, 'is not unique');
+    }
+
+    private static function stringField(array $input, string $field): string
+    {
+        if (!array_key_exists($field, $input) || !is_string($input[$field])) {
+            throw new ApiException(422, 'INVALID_FIELD_TYPE', "{$field} 必須是字串。", [], [
+                $field => '必須是字串。',
+            ]);
+        }
+        return $input[$field];
     }
 
     private static function createSession(

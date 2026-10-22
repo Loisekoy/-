@@ -3,8 +3,8 @@ name: FitTrack daily maintenance and verified backup
 on:
   workflow_dispatch:
   schedule:
-    # 03:17 Asia/Taipei. A non-zero minute reduces peak-time scheduling delays.
-    - cron: "17 19 * * *"
+    # 03:00 Asia/Taipei, matching SRS NFR-14.
+    - cron: "0 19 * * *"
 
 permissions:
   contents: read

@@ -47,18 +47,19 @@ $pdo->exec(
     'CREATE TABLE IF NOT EXISTS schema_migrations ('
     . 'version VARCHAR(80) PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)'
 );
-$hardeningVersion = '20261016_acceptance_hardening';
 $versionStatement = $pdo->prepare('SELECT 1 FROM schema_migrations WHERE version = ?');
-$versionStatement->execute([$hardeningVersion]);
-if (!$versionStatement->fetchColumn()) {
-    $hardeningPath = dirname(__DIR__) . '/database/migrations/' . $hardeningVersion . '.sql';
-    $hardeningSql = file_get_contents($hardeningPath);
-    if ($hardeningSql === false) {
-        throw new RuntimeException('Migration file is missing: ' . $hardeningPath);
+foreach (['20261016_acceptance_hardening', '20261022_srs_conformance'] as $migrationVersion) {
+    $versionStatement->execute([$migrationVersion]);
+    if ($versionStatement->fetchColumn()) {
+        fwrite(STDOUT, "Migration {$migrationVersion} already applied.\n");
+        continue;
     }
-    fwrite(STDOUT, "Applying acceptance concurrency hardening...\n");
-    $pdo->exec($hardeningSql);
-    fwrite(STDOUT, "Migration {$hardeningVersion} applied.\n");
-} else {
-    fwrite(STDOUT, "Migration {$hardeningVersion} already applied.\n");
+    $migrationPath = dirname(__DIR__) . '/database/migrations/' . $migrationVersion . '.sql';
+    $migrationSql = file_get_contents($migrationPath);
+    if ($migrationSql === false) {
+        throw new RuntimeException('Migration file is missing: ' . $migrationPath);
+    }
+    fwrite(STDOUT, "Applying migration {$migrationVersion}...\n");
+    $pdo->exec($migrationSql);
+    fwrite(STDOUT, "Migration {$migrationVersion} applied.\n");
 }

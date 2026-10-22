@@ -57,7 +57,7 @@ try {
 
     $login = LoginRateLimiter::attempt($pdo, '198.51.100.10', fn (): array => Auth::login($pdo, [
         'email' => 'demo@fittrack.local',
-        'password' => 'Demo12345',
+        'password' => 'Demo123456',
     ]));
     $token = (string) $login['access_token'];
     check(
@@ -81,6 +81,7 @@ try {
 
     $plan = PlanGenerator::generate($pdo, (int) $user['user_id'], 'Smoke Test Plan');
     check(count($plan['days']) === 4, '依每週天數產生完整課表與規劃輸入快照');
+    check($plan['algorithm_version'] === 'rules-v1', '規則式課表記錄規格指定的 rules-v1');
     check(
         (int) $plan['age_snapshot'] > 0
         && (float) $plan['height_cm_snapshot'] > 0
@@ -96,6 +97,11 @@ try {
             && (int) $day['estimated_seconds'] <= (int) $plan['duration_minutes'] * 60,
             '每個課表日有 3 至 6 動作且不超過可用時間'
         );
+        $dayExerciseIds = array_map(
+            static fn (array $exercise): int => (int) $exercise['exercise_id'],
+            $day['exercises']
+        );
+        check(count($dayExerciseIds) === count(array_unique($dayExerciseIds)), '同一訓練日不重複動作身份');
         foreach ($day['exercises'] as $exercise) {
             $coveredParts[$exercise['body_part_name']] = true;
             check(
@@ -108,27 +114,26 @@ try {
     }
     check(count($coveredParts) === 8, '規則式課表先完成八個身體部位的每週覆蓋');
 
-    $secondComputerPlan = PlanGenerator::generate($pdo, (int) $user['user_id'], 'Randomized Plan');
+    $secondComputerPlan = PlanGenerator::generate($pdo, (int) $user['user_id'], 'Deterministic Plan');
     $firstPlanExerciseIds = [];
     foreach ($plan['days'] as $planDay) {
+        $dayIds = [];
         foreach ($planDay['exercises'] as $exercise) {
-            $firstPlanExerciseIds[] = (int) $exercise['exercise_id'];
+            $dayIds[] = (int) $exercise['exercise_id'];
         }
+        $firstPlanExerciseIds[] = $dayIds;
     }
     $secondPlanExerciseIds = [];
     foreach ($secondComputerPlan['days'] as $planDay) {
+        $dayIds = [];
         foreach ($planDay['exercises'] as $exercise) {
-            $secondPlanExerciseIds[] = (int) $exercise['exercise_id'];
+            $dayIds[] = (int) $exercise['exercise_id'];
         }
+        $secondPlanExerciseIds[] = $dayIds;
     }
-    $overlap = array_intersect($firstPlanExerciseIds, $secondPlanExerciseIds);
     check(
-        count($overlap) <= (int) floor(count($firstPlanExerciseIds) * 0.25),
-        '連續兩份電腦課表優先避開最近使用動作，重複率不超過 25%'
-    );
-    check(
-        count($secondPlanExerciseIds) === count(array_unique($secondPlanExerciseIds)),
-        '同一份電腦課表不重複安排相同動作'
+        $firstPlanExerciseIds === $secondPlanExerciseIds,
+        '相同設定依難度與動作 ID 固定排序，規則式課表可重現'
     );
 
     $manualPlan = PlanGenerator::createManual($pdo, (int) $user['user_id'], 'Manual Test Plan', [
@@ -323,22 +328,20 @@ try {
     check($admin['role'] === 'ADMIN', '管理員資格由 admins 資料表決定');
     $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . $adminToken;
     $adminApi = new Api($pdo, '203.0.113.8');
-    $updateAdminUser = new ReflectionMethod(Api::class, 'updateAdminUser');
-    $deactivatedUser = $updateAdminUser->invoke($adminApi, (int) $user['user_id'], ['is_active' => 0], $admin);
-    check((int) $deactivatedUser['is_active'] === 0, '管理員可以停用其他會員帳號');
+    check(!method_exists(Api::class, 'updateAdminUser'), '管理員不提供停用或恢復他人帳號的介面');
+    $selfDeactivate = Auth::register($pdo, [
+        'name' => 'Self Deactivate',
+        'email' => 'self-deactivate@example.test',
+        'password' => 'SelfDeactivate123',
+    ]);
+    $selfDeactivateToken = (string) $selfDeactivate['access_token'];
+    $selfDeactivateUser = Auth::user($pdo, $selfDeactivateToken);
+    Auth::deactivate($pdo, $selfDeactivateUser, ['current_password' => 'SelfDeactivate123']);
     try {
-        Auth::user($pdo, $token);
-        check(false, '被管理員停用的會員舊 Token 應立即失效');
+        Auth::user($pdo, $selfDeactivateToken);
+        check(false, '會員自行停用後舊 Token 應立即失效');
     } catch (ApiException $error) {
-        check($error->status === 401 && $error->errorCode === 'TOKEN_INVALID', '被管理員停用的會員舊 Token 立即失效');
-    }
-    $reactivatedUser = $updateAdminUser->invoke($adminApi, (int) $user['user_id'], ['is_active' => 1], $admin);
-    check((int) $reactivatedUser['is_active'] === 1, '管理員可以恢復其他會員帳號');
-    try {
-        $updateAdminUser->invoke($adminApi, (int) $admin['user_id'], ['is_active' => 0], $admin);
-        check(false, '管理員不應透過會員管理停用自己的帳號');
-    } catch (ApiException $error) {
-        check($error->status === 409 && $error->errorCode === 'CANNOT_CHANGE_SELF', '管理員不能透過會員管理停用自己的帳號');
+        check($error->status === 401 && $error->errorCode === 'TOKEN_INVALID', '會員自行停用會撤銷舊 Token');
     }
     $updateExercise = new ReflectionMethod(Api::class, 'updateExercise');
     $newName = $oldName . '（新版）';

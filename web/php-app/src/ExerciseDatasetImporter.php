@@ -41,102 +41,127 @@ final class ExerciseDatasetImporter
 
         $copiedImages = 0;
         $copiedGifs = 0;
-        foreach ($records as $record) {
-            if (self::copyIfChanged($record['_image_source'], $mediaDirectory . '/' . basename($record['_image_source']))) {
-                $copiedImages++;
-            }
-            if (self::copyIfChanged($record['_gif_source'], $mediaDirectory . '/' . basename($record['_gif_source']))) {
-                $copiedGifs++;
-            }
-        }
-
-        $bundleRecords = array_map(static fn (array $record): array => [
-            'exercise_name' => $record['exercise_name'],
-            'body_part_name' => $record['body_part_name'],
-            'difficulty_level' => $record['difficulty_level'],
-            'equipment' => $record['equipment'],
-            'description' => $record['description'],
-            'image_url' => $record['image_url'],
-        ], $records);
-        $bundleUpdated = self::writeBundle($bundleRecords);
-
-        $partRows = $pdo->query('SELECT body_part_id, body_part_name FROM body_parts')->fetchAll();
-        $partIds = [];
-        foreach ($partRows as $row) {
-            $partIds[(string) $row['body_part_name']] = (int) $row['body_part_id'];
-        }
-        foreach (self::BODY_PARTS as $part) {
-            if (!isset($partIds[$part])) {
-                throw new RuntimeException("資料庫缺少身體部位：{$part}");
-            }
-        }
-
-        $currentRows = $pdo->query(
-            'SELECT e.exercise_id, e.body_part_id, ev.version_no, ev.exercise_name, '
-            . 'ev.difficulty_level, ev.equipment, ev.description, ev.image_url '
-            . 'FROM exercises e JOIN exercise_versions ev ON ev.exercise_id = e.exercise_id '
-            . 'WHERE ev.version_no = ('
-            . 'SELECT MAX(v2.version_no) FROM exercise_versions v2 WHERE v2.exercise_id = e.exercise_id)'
-        )->fetchAll();
-        $currentByDatasetId = [];
-        foreach ($currentRows as $row) {
-            if (preg_match('/#([0-9]+)$/', (string) $row['exercise_name'], $matches)) {
-                $currentByDatasetId[$matches[1]] = $row;
-            }
-        }
-
-        $inserted = 0;
-        $updated = 0;
-        $unchanged = 0;
-        Database::beginTransaction($pdo);
+        $fileChanges = [];
         try {
             foreach ($records as $record) {
-                $partId = $partIds[$record['body_part_name']];
-                $current = $currentByDatasetId[$record['_dataset_id']] ?? null;
-                if ($current === null) {
-                    self::insertExercise($pdo, $record, $partId);
-                    $inserted++;
-                    continue;
+                if (self::copyIfChanged(
+                    $record['_image_source'],
+                    $mediaDirectory . '/' . basename($record['_image_source']),
+                    $fileChanges
+                )) {
+                    $copiedImages++;
                 }
-
-                $changed = (int) $current['body_part_id'] !== $partId
-                    || (string) $current['exercise_name'] !== $record['exercise_name']
-                    || (string) $current['difficulty_level'] !== $record['difficulty_level']
-                    || (string) ($current['equipment'] ?? '') !== (string) ($record['equipment'] ?? '')
-                    || (string) $current['description'] !== $record['description']
-                    || (string) ($current['image_url'] ?? '') !== (string) ($record['image_url'] ?? '');
-                if (!$changed) {
-                    $unchanged++;
-                    continue;
+                if (self::copyIfChanged(
+                    $record['_gif_source'],
+                    $mediaDirectory . '/' . basename($record['_gif_source']),
+                    $fileChanges
+                )) {
+                    $copiedGifs++;
                 }
-
-                $exerciseId = (int) $current['exercise_id'];
-                if ((int) $current['body_part_id'] !== $partId) {
-                    $pdo->prepare('UPDATE exercises SET body_part_id = ? WHERE exercise_id = ?')
-                        ->execute([$partId, $exerciseId]);
-                }
-                $pdo->prepare(
-                    'INSERT INTO exercise_versions '
-                    . '(exercise_id, version_no, exercise_name, difficulty_level, equipment, description, image_url) '
-                    . 'VALUES (?, ?, ?, ?, ?, ?, ?)'
-                )->execute([
-                    $exerciseId,
-                    (int) $current['version_no'] + 1,
-                    $record['exercise_name'],
-                    $record['difficulty_level'],
-                    $record['equipment'],
-                    $record['description'],
-                    $record['image_url'],
-                ]);
-                $updated++;
             }
-            $pdo->commit();
+
+            $bundleRecords = array_map(static fn (array $record): array => [
+                'exercise_name' => $record['exercise_name'],
+                'body_part_name' => $record['body_part_name'],
+                'difficulty_level' => $record['difficulty_level'],
+                'equipment' => $record['equipment'],
+                'description' => $record['description'],
+                'image_url' => $record['image_url'],
+            ], $records);
+            $bundleUpdated = self::writeBundle($bundleRecords, $fileChanges);
         } catch (\Throwable $error) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
+            self::rollbackFileChanges($fileChanges);
             throw $error;
         }
+
+        try {
+            $partRows = $pdo->query('SELECT body_part_id, body_part_name FROM body_parts')->fetchAll();
+            $partIds = [];
+            foreach ($partRows as $row) {
+                $partIds[(string) $row['body_part_name']] = (int) $row['body_part_id'];
+            }
+            foreach (self::BODY_PARTS as $part) {
+                if (!isset($partIds[$part])) {
+                    throw new RuntimeException("資料庫缺少身體部位：{$part}");
+                }
+            }
+
+            $currentRows = $pdo->query(
+                'SELECT e.exercise_id, e.body_part_id, e.is_active, ev.version_no, ev.exercise_name, '
+                . 'ev.difficulty_level, ev.equipment, ev.description, ev.image_url '
+                . 'FROM exercises e JOIN exercise_versions ev ON ev.exercise_id = e.exercise_id '
+                . 'WHERE ev.version_no = ('
+                . 'SELECT MAX(v2.version_no) FROM exercise_versions v2 WHERE v2.exercise_id = e.exercise_id) '
+                . 'ORDER BY e.is_active DESC, e.exercise_id DESC'
+            )->fetchAll();
+            $currentByDatasetId = [];
+            foreach ($currentRows as $row) {
+                if (preg_match('/#([0-9]+)$/', (string) $row['exercise_name'], $matches)
+                    && !isset($currentByDatasetId[$matches[1]])) {
+                    $currentByDatasetId[$matches[1]] = $row;
+                }
+            }
+
+            $inserted = 0;
+            $updated = 0;
+            $unchanged = 0;
+            Database::beginTransaction($pdo);
+            try {
+                foreach ($records as $record) {
+                    $partId = $partIds[$record['body_part_name']];
+                    $current = $currentByDatasetId[$record['_dataset_id']] ?? null;
+                    if ($current === null) {
+                        self::insertExercise($pdo, $record, $partId);
+                        $inserted++;
+                        continue;
+                    }
+
+                    $changed = (int) $current['body_part_id'] !== $partId
+                        || (string) $current['exercise_name'] !== $record['exercise_name']
+                        || (string) $current['difficulty_level'] !== $record['difficulty_level']
+                        || (string) ($current['equipment'] ?? '') !== (string) ($record['equipment'] ?? '')
+                        || (string) $current['description'] !== $record['description']
+                        || (string) ($current['image_url'] ?? '') !== (string) ($record['image_url'] ?? '');
+                    if (!$changed) {
+                        $unchanged++;
+                        continue;
+                    }
+
+                    $exerciseId = (int) $current['exercise_id'];
+                    if ((int) $current['body_part_id'] !== $partId) {
+                        $pdo->prepare('UPDATE exercises SET is_active = FALSE WHERE exercise_id = ?')
+                            ->execute([$exerciseId]);
+                        self::insertExercise($pdo, $record, $partId);
+                        $updated++;
+                        continue;
+                    }
+                    $pdo->prepare(
+                        'INSERT INTO exercise_versions '
+                        . '(exercise_id, version_no, exercise_name, difficulty_level, equipment, description, image_url) '
+                        . 'VALUES (?, ?, ?, ?, ?, ?, ?)'
+                    )->execute([
+                        $exerciseId,
+                        (int) $current['version_no'] + 1,
+                        $record['exercise_name'],
+                        $record['difficulty_level'],
+                        $record['equipment'],
+                        $record['description'],
+                        $record['image_url'],
+                    ]);
+                    $updated++;
+                }
+                $pdo->commit();
+            } catch (\Throwable $error) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $error;
+            }
+        } catch (\Throwable $error) {
+            self::rollbackFileChanges($fileChanges);
+            throw $error;
+        }
+        self::discardFileBackups($fileChanges);
 
         return [
             'records' => count($records),
@@ -282,13 +307,15 @@ final class ExerciseDatasetImporter
         return $path;
     }
 
-    private static function copyIfChanged(string $source, string $destination): bool
+    /** @param list<array{destination:string,backup:?string}> $changes */
+    private static function copyIfChanged(string $source, string $destination, array &$changes): bool
     {
         if (is_file($destination)
             && filesize($source) === filesize($destination)
             && hash_file('sha256', $source) === hash_file('sha256', $destination)) {
             return false;
         }
+        self::rememberFile($destination, $changes);
         if (!copy($source, $destination)) {
             throw new RuntimeException("無法複製媒體檔：{$source}");
         }
@@ -296,13 +323,14 @@ final class ExerciseDatasetImporter
     }
 
     /** @param list<array<string, mixed>> $records */
-    private static function writeBundle(array $records): bool
+    private static function writeBundle(array $records, array &$changes): bool
     {
         $path = Config::root() . '/database/exercises-seed.json';
         $json = json_encode($records, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
         if (is_file($path) && (string) file_get_contents($path) === $json) {
             return false;
         }
+        self::rememberFile($path, $changes);
         $temporary = tempnam(dirname($path), 'exercise-seed-');
         if ($temporary === false || file_put_contents($temporary, $json, LOCK_EX) === false
             || !rename($temporary, $path)) {
@@ -312,6 +340,45 @@ final class ExerciseDatasetImporter
             throw new RuntimeException('無法更新動作種子資料。');
         }
         return true;
+    }
+
+    /** @param list<array{destination:string,backup:?string}> $changes */
+    private static function rememberFile(string $destination, array &$changes): void
+    {
+        $backup = null;
+        if (is_file($destination)) {
+            $backup = tempnam(sys_get_temp_dir(), 'fittrack-import-');
+            if ($backup === false || !copy($destination, $backup)) {
+                if (is_string($backup) && is_file($backup)) {
+                    unlink($backup);
+                }
+                throw new RuntimeException("無法備份即將更新的檔案：{$destination}");
+            }
+        }
+        $changes[] = ['destination' => $destination, 'backup' => $backup];
+    }
+
+    /** @param list<array{destination:string,backup:?string}> $changes */
+    private static function rollbackFileChanges(array $changes): void
+    {
+        foreach (array_reverse($changes) as $change) {
+            if ($change['backup'] !== null) {
+                copy($change['backup'], $change['destination']);
+                unlink($change['backup']);
+            } elseif (is_file($change['destination'])) {
+                unlink($change['destination']);
+            }
+        }
+    }
+
+    /** @param list<array{destination:string,backup:?string}> $changes */
+    private static function discardFileBackups(array $changes): void
+    {
+        foreach ($changes as $change) {
+            if ($change['backup'] !== null && is_file($change['backup'])) {
+                unlink($change['backup']);
+            }
+        }
     }
 
     /** @param array<string, mixed> $record */

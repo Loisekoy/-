@@ -4,6 +4,7 @@ const state = {
     reference: null,
     route: '',
     plans: [],
+    planPage: 1,
     selectedPlanId: null,
     selectedDayIndex: 0,
     planCreationMode: 'computer',
@@ -16,8 +17,13 @@ const state = {
     exercisePage: 1,
     dashboardFilters: { start_date: '', end_date: '' },
     historyFilters: { start_date: '', end_date: '', status: '', exercise_id: '' },
+    historyPage: 1,
     historyDetailId: null,
+    bodyRecordPage: 1,
+    bodyPartPriority: [],
     adminTab: 'users',
+    adminUserPage: 1,
+    adminExercisePage: 1,
     adminSelectedTable: 'users',
     adminEditingExerciseId: null,
     planEditing: false,
@@ -71,6 +77,29 @@ const formatElapsedDuration = (seconds) => {
     const minutes = Math.floor((total % 3600) / 60);
     const remainingSeconds = total % 60;
     return [hours, minutes, remainingSeconds].map((part) => String(part).padStart(2, '0')).join(':');
+};
+
+const taipeiToday = () => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+};
+
+const paginationMarkup = (result, action, label) => {
+    const total = Number(result.total || 0);
+    const pageSize = Number(result.page_size || 20);
+    const page = Number(result.page || 1);
+    if (total <= pageSize) return '';
+    return `<nav class="pagination" aria-label="${escapeHtml(label)}">
+        <button class="button button-small" data-action="${action}" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>← 上一頁</button>
+        <span>第 ${formatNumber(page)} / ${formatNumber(Math.ceil(total / pageSize))} 頁</span>
+        <button class="button button-small" data-action="${action}" data-page="${page + 1}" ${page * pageSize >= total ? 'disabled' : ''}>下一頁 →</button>
+    </nav>`;
 };
 
 const exerciseImage = (url, name, lazy = false) => url
@@ -246,7 +275,7 @@ function renderAuth(mode) {
                         </div>
                         <div class="field">
                             <label for="auth-password">密碼</label>
-                            <input id="auth-password" name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" ${register ? 'minlength="10"' : ''} maxlength="72" required value="${register ? '' : 'Demo12345'}">
+                            <input id="auth-password" name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" ${register ? 'minlength="10"' : ''} maxlength="72" required value="${register ? '' : 'Demo123456'}">
                         </div>
                         <button class="button button-primary" type="submit">${register ? '註冊並開始設定' : '登入系統'}</button>
                     </form>
@@ -255,7 +284,7 @@ function renderAuth(mode) {
                         <button class="text-link" data-action="navigate" data-route="${register ? 'login' : 'register'}">${register ? '登入' : '免費註冊'}</button>
                     </p>
                     <div class="demo-note">
-                        示範會員：demo@fittrack.local / Demo12345<br>
+                        示範會員：demo@fittrack.local / Demo123456<br>
                         管理員登入資訊由維護者私下提供，不會顯示在公開網站<br>
                         你也可以免費註冊自己的帳號
                     </div>
@@ -494,16 +523,21 @@ function renderManualPlanBuilder() {
 async function renderPlans() {
     loading();
     const [result, exerciseResult] = await Promise.all([
-        api('/plans'),
+        api(`/plans?page=${state.planPage}&page_size=20`),
         api('/exercises/options'),
     ]);
     state.plans = result.items || [];
+    if (!state.plans.length && Number(result.total || 0) > 0 && state.planPage > 1) {
+        state.planPage--;
+        return renderPlans();
+    }
     state.exerciseOptions = exerciseResult.items || [];
     if (state.planCreationMode === 'manual') ensureManualPlanDraft();
     if (!state.selectedPlanId && state.plans.length) {
         state.selectedPlanId = Number(state.plans[0].workout_plan_id);
     }
     const selected = state.plans.find((plan) => Number(plan.workout_plan_id) === Number(state.selectedPlanId)) || state.plans[0];
+    state.selectedPlanId = selected ? Number(selected.workout_plan_id) : null;
     const day = selected?.days?.[state.selectedDayIndex] || selected?.days?.[0];
     main.innerHTML = `
         <div class="page-shell">
@@ -519,7 +553,7 @@ async function renderPlans() {
                 </div>
                 <p class="plan-generator-status">${state.planCreationMode === 'manual'
                     ? '由你決定每一天的動作、順序、組數、次數與休息時間。'
-                    : '電腦會依目標、程度、偏好部位與可用時間安排，並優先避開最近課表用過的動作。'}</p>
+                    : '電腦會依目標、程度、偏好部位與可用時間，按照固定規則安排可重現的課表。'}</p>
                 <div id="manual-plan-builder" ${state.planCreationMode === 'manual' ? '' : 'hidden'}>${state.planCreationMode === 'manual' ? manualPlannerMarkup() : ''}</div>
             </form>
             ${state.plans.length > 1 ? `
@@ -528,6 +562,7 @@ async function renderPlans() {
                         ${state.plans.map((plan) => `<option value="${plan.workout_plan_id}" ${Number(plan.workout_plan_id) === Number(selected?.workout_plan_id) ? 'selected' : ''}>${escapeHtml(plan.plan_name)} - ${formatDate(plan.created_at)}</option>`).join('')}
                     </select>
                 </div>` : ''}
+            ${paginationMarkup(result, 'plan-page', '課表分頁')}
             ${selected ? `
                 <div class="plan-layout">
                     <aside class="day-list" aria-label="課表訓練日">
@@ -561,7 +596,7 @@ async function renderPlans() {
                                 <button class="button button-primary" data-action="start-workout" data-day-id="${day.plan_day_id}">▶ 開始 Day ${day.day_number} 訓練</button>
                             </div>
                             <div class="plan-table-scroll"><table class="data-table responsive plan-exercise-table">
-                                <thead><tr><th>#</th><th>示意圖</th><th>動作名稱</th><th>主要部位</th><th>器材</th><th>目標</th><th>休息</th></tr></thead>
+                                <thead><tr><th>#</th><th>示意圖</th><th>動作名稱</th><th>主要部位</th><th>器材</th><th>目標</th><th>目標重量</th><th>休息</th></tr></thead>
                                 <tbody>${day.exercises.map((exercise) => `
                                     <tr class="plan-exercise-editor" data-plan-exercise-id="${exercise.plan_exercise_id}">
                                         <td data-label="#">${exercise.exercise_order}</td>
@@ -574,6 +609,9 @@ async function renderPlans() {
                                         <td data-label="目標">${state.planEditing
                                             ? `<div class="plan-number-pair"><input class="plan-sets" type="number" min="1" max="10" value="${exercise.target_sets}" aria-label="目標組數"><span>×</span><input class="plan-reps" type="number" min="1" max="50" value="${exercise.target_reps}" aria-label="目標次數"></div>`
                                             : `${exercise.target_sets} × ${exercise.target_reps}`}</td>
+                                        <td data-label="目標重量">${state.planEditing
+                                            ? `<input class="plan-weight" type="number" min="0" max="999.99" step="0.01" value="${escapeHtml(exercise.target_weight_kg ?? '')}" placeholder="選填" aria-label="目標重量 kg">`
+                                            : `${exercise.target_weight_kg === null ? '未設定' : `${formatNumber(exercise.target_weight_kg, 2)} kg`}`}</td>
                                         <td data-label="休息">${state.planEditing
                                             ? `<div class="plan-rest-input"><input class="plan-rest" type="number" min="0" max="600" step="5" value="${exercise.rest_seconds}" aria-label="休息秒數"><span>秒</span></div>`
                                             : `${exercise.rest_seconds} 秒`}</td>
@@ -778,6 +816,7 @@ async function renderExercises() {
                 <input name="q" type="search" maxlength="100" placeholder="搜尋動作名稱或身體部位" value="${escapeHtml(state.exerciseFilters.q)}" aria-label="搜尋動作名稱或身體部位">
                 <select name="body_part_id" aria-label="依身體部位篩選"><option value="">全部部位</option>${state.reference.body_parts.map((part) => `<option value="${part.body_part_id}" ${String(part.body_part_id) === String(state.exerciseFilters.body_part_id) ? 'selected' : ''}>${escapeHtml(part.body_part_name)}</option>`).join('')}</select>
                 <select name="difficulty_level" aria-label="依難度篩選"><option value="">全部難度</option>${['Beginner', 'Intermediate', 'Advanced'].map((level) => `<option ${level === state.exerciseFilters.difficulty_level ? 'selected' : ''}>${level}</option>`).join('')}</select>
+                <button class="button button-small" type="submit">套用篩選</button>
             </form>
             ${items.length ? `<div class="exercise-grid">${items.map((exercise) => `
                 <article class="exercise-card">
@@ -798,7 +837,11 @@ async function renderExercises() {
 
 async function renderHistory() {
     loading();
-    const params = new URLSearchParams(Object.entries(state.historyFilters).filter(([, value]) => value));
+    const params = new URLSearchParams({
+        ...Object.fromEntries(Object.entries(state.historyFilters).filter(([, value]) => value)),
+        page: String(state.historyPage),
+        page_size: '20',
+    });
     const [result, exercises] = await Promise.all([
         api(`/workout-sessions?${params.toString()}`),
         api('/exercises/options'),
@@ -817,6 +860,11 @@ async function renderHistory() {
                 <button class="button button-small" type="submit">套用篩選</button>
             </form>
             <section class="data-section" style="margin-top:32px">${historyTable(result.items || [])}</section>
+            ${Number(result.total || 0) > Number(result.page_size || 20) ? `<nav class="pagination" aria-label="訓練歷史分頁">
+                <button class="button button-small" data-action="history-page" data-page="${Number(result.page) - 1}" ${Number(result.page) <= 1 ? 'disabled' : ''}>← 上一頁</button>
+                <span>第 ${formatNumber(result.page)} / ${formatNumber(Math.ceil(Number(result.total) / Number(result.page_size)))} 頁</span>
+                <button class="button button-small" data-action="history-page" data-page="${Number(result.page) + 1}" ${Number(result.page) * Number(result.page_size) >= Number(result.total) ? 'disabled' : ''}>下一頁 →</button>
+            </nav>` : ''}
             ${detail ? renderWorkoutHistoryDetail(detail) : ''}
         </div>`;
 }
@@ -829,7 +877,7 @@ function renderWorkoutHistoryDetail(session) {
             return `<article class="settings-section" style="margin-top:16px">
                 <div class="exercise-meta"><strong>${escapeHtml(exercise.exercise_name)}</strong><span>${escapeHtml(exercise.body_part_name)}</span><span>V${exercise.version_no}</span></div>
                 <p>${escapeHtml(exercise.description)}</p>
-                ${sets.length ? `<div class="set-table">${sets.map((set) => `<div class="set-row"><strong>${set.set_number}</strong><input id="history-weight-${set.workout_set_id}" class="set-input" type="number" min="0" max="999.99" step="0.01" value="${escapeHtml(set.weight_kg)}" aria-label="第 ${set.set_number} 組重量"><input id="history-reps-${set.workout_set_id}" class="set-input" type="number" min="1" max="999" value="${set.reps}" aria-label="第 ${set.set_number} 組次數"><div class="set-actions"><button class="icon-button compact" data-action="update-history-set" data-set-id="${set.workout_set_id}" title="更新此組" aria-label="更新此組">↻</button><button class="icon-button compact danger" data-action="delete-history-set" data-set-id="${set.workout_set_id}" title="刪除此組" aria-label="刪除此組">×</button></div></div>`).join('')}</div>` : '<p class="empty-state">這個動作沒有已儲存組數。</p>'}
+                ${sets.length ? `<div class="set-table">${sets.map((set) => `<div class="set-row"><strong>${set.set_number}</strong><input id="history-weight-${set.workout_set_id}" class="set-input" type="number" min="0" max="999.99" step="0.01" value="${escapeHtml(set.weight_kg)}" aria-label="第 ${set.set_number} 組重量" ${session.status === 'cancelled' ? 'disabled' : ''}><input id="history-reps-${set.workout_set_id}" class="set-input" type="number" min="1" max="999" value="${set.reps}" aria-label="第 ${set.set_number} 組次數" ${session.status === 'cancelled' ? 'disabled' : ''}>${session.status === 'cancelled' ? '' : `<div class="set-actions"><button class="icon-button compact" data-action="update-history-set" data-set-id="${set.workout_set_id}" title="更新此組" aria-label="更新此組">↻</button><button class="icon-button compact danger" data-action="delete-history-set" data-set-id="${set.workout_set_id}" title="刪除此組" aria-label="刪除此組">×</button></div>`}</div>`).join('')}</div>` : '<p class="empty-state">這個動作沒有已儲存組數。</p>'}
             </article>`;
         }).join('')}
     </section>`;
@@ -839,6 +887,7 @@ async function renderProfile() {
     loading();
     state.me = await api('/me');
     renderHeader();
+    state.bodyPartPriority = (state.me.preferred_body_parts || []).map((part) => Number(part.body_part_id));
     const selectedPartIds = new Set((state.me.preferred_body_parts || []).map((part) => Number(part.body_part_id)));
     main.innerHTML = `
         <div class="page-shell">
@@ -851,9 +900,9 @@ async function renderProfile() {
                         <div class="field"><label for="profile-name">姓名</label><input id="profile-name" name="name" value="${escapeHtml(state.me.name)}" required></div>
                         <div class="field"><label for="profile-gender">性別</label><select id="profile-gender" name="gender"><option value="">未提供</option>${['Female', 'Male', 'Other'].map((value) => `<option ${state.me.gender === value ? 'selected' : ''}>${value}</option>`).join('')}</select></div>
                         <div class="field"><label for="profile-age">年齡</label><input id="profile-age" name="age" type="number" min="13" max="100" value="${escapeHtml(state.me.age || '')}" required></div>
-                        <div class="field"><label for="profile-height">身高 cm</label><input id="profile-height" name="height_cm" type="number" min="100" max="250" step="0.1" value="${escapeHtml(state.me.height_cm || '')}" required></div>
+                        <div class="field"><label for="profile-height">身高 cm</label><input id="profile-height" name="height_cm" type="number" min="100" max="250" step="0.01" value="${escapeHtml(state.me.height_cm || '')}" required></div>
                         <div class="field"><label for="profile-experience">訓練程度</label><select id="profile-experience" name="training_experience" required><option value="">請選擇</option>${['Beginner', 'Intermediate', 'Advanced'].map((value) => `<option ${state.me.training_experience === value ? 'selected' : ''}>${value}</option>`).join('')}</select></div>
-                        <div class="field"><label for="profile-weight">目前體重 kg</label><input id="profile-weight" name="weight_kg" type="number" min="20" max="500" step="0.1" value="${escapeHtml(state.me.current_weight_kg || '')}" required></div>
+                        <div class="field"><label for="profile-weight">目前體重 kg</label><input id="profile-weight" name="weight_kg" type="number" min="20" max="500" step="0.01" value="${escapeHtml(state.me.current_weight_kg || '')}" required></div>
                         <div class="form-actions" style="grid-column:1/-1"><button class="button button-primary" type="submit">儲存基本資料</button></div>
                     </form>
                 </section>
@@ -869,6 +918,7 @@ async function renderProfile() {
                 <section class="settings-section full">
                     <h2 class="section-heading zh">想加強的部位</h2>
                     <p class="section-copy">選取順序會作為排課優先順序。</p>
+                    <p id="body-part-priority" class="section-copy" aria-live="polite"></p>
                     <form id="body-parts-form">
                         <div class="choice-grid">
                             ${state.reference.body_parts.map((part) => `<label class="choice"><input type="checkbox" name="body_part_ids" value="${part.body_part_id}" ${selectedPartIds.has(Number(part.body_part_id)) ? 'checked' : ''}><span>${escapeHtml(part.body_part_name)}</span></label>`).join('')}
@@ -879,7 +929,7 @@ async function renderProfile() {
                 <section class="settings-section full">
                     <h2 class="section-heading zh">體重紀錄</h2>
                     <form id="body-record-form" class="form-grid two-columns" style="margin-top:20px;max-width:680px">
-                        <div class="field"><label for="record-date">日期</label><input id="record-date" name="record_date" type="date" min="1900-01-01" max="${new Date().toISOString().slice(0, 10)}" required></div>
+                        <div class="field"><label for="record-date">日期</label><input id="record-date" name="record_date" type="date" min="1900-01-01" max="${taipeiToday()}" required></div>
                         <div class="field"><label for="record-weight">體重 kg</label><input id="record-weight" name="weight_kg" type="number" min="20" max="500" step="0.01" required></div>
                         <div class="field" style="grid-column:1/-1"><label for="record-notes">備註</label><input id="record-notes" name="notes" maxlength="1000"></div>
                         <div class="form-actions" style="grid-column:1/-1"><button class="button" type="submit">新增體重紀錄</button></div>
@@ -902,19 +952,35 @@ async function renderProfile() {
                 </section>
             </div>
         </div>`;
-    renderBodyRecordList();
+    updateBodyPartPriorityText();
+    await renderBodyRecordList();
+}
+
+function updateBodyPartPriorityText() {
+    const output = document.querySelector('#body-part-priority');
+    if (!output) return;
+    const names = state.bodyPartPriority.map((id, index) => {
+        const part = state.reference.body_parts.find((item) => Number(item.body_part_id) === Number(id));
+        return `${index + 1}. ${part?.body_part_name || id}`;
+    });
+    output.textContent = names.length ? `目前優先順序：${names.join(' → ')}` : '尚未選擇部位。';
 }
 
 async function renderBodyRecordList() {
     const container = document.querySelector('#body-record-list');
     if (!container) return;
-    const result = await api('/body-records');
+    const result = await api(`/body-records?page=${state.bodyRecordPage}&page_size=20`);
     const items = result.items || [];
     container.innerHTML = items.length ? `
         <table class="data-table responsive">
             <thead><tr><th>日期</th><th>體重</th><th>備註</th><th>操作</th></tr></thead>
             <tbody>${items.map((item) => `<tr><td data-label="日期">${formatDate(item.record_date)}</td><td data-label="體重">${formatNumber(item.weight_kg, 1)} kg</td><td data-label="備註">${escapeHtml(item.notes || '-')}</td><td data-label="操作"><div class="form-actions" style="margin-top:0"><button class="button button-small" data-action="edit-body-record" data-record-id="${item.body_record_id}" data-date="${escapeHtml(item.record_date)}" data-weight="${escapeHtml(item.weight_kg)}" data-notes="${escapeHtml(item.notes || '')}">編輯</button><button class="button button-small button-danger" data-action="delete-body-record" data-record-id="${item.body_record_id}">刪除</button></div></td></tr>`).join('')}</tbody>
-        </table>` : '<div class="empty-state">尚無體重紀錄。</div>';
+        </table>
+        ${Number(result.total || 0) > Number(result.page_size || 20) ? `<nav class="pagination" aria-label="體重紀錄分頁">
+            <button class="button button-small" data-action="body-record-page" data-page="${Number(result.page) - 1}" ${Number(result.page) <= 1 ? 'disabled' : ''}>← 上一頁</button>
+            <span>第 ${formatNumber(result.page)} / ${formatNumber(Math.ceil(Number(result.total) / Number(result.page_size)))} 頁</span>
+            <button class="button button-small" data-action="body-record-page" data-page="${Number(result.page) + 1}" ${Number(result.page) * Number(result.page_size) >= Number(result.total) ? 'disabled' : ''}>下一頁 →</button>
+        </nav>` : ''}` : '<div class="empty-state">尚無體重紀錄。</div>';
 }
 
 async function renderAdmin() {
@@ -925,8 +991,8 @@ async function renderAdmin() {
     loading();
     const [stats, users, exercises, databaseOverview] = await Promise.all([
         api('/admin/statistics'),
-        api('/admin/users'),
-        api('/admin/exercises'),
+        api(`/admin/users?page=${state.adminUserPage}&page_size=20`),
+        api(`/admin/exercises?page=${state.adminExercisePage}&page_size=20`),
         state.adminTab === 'database' ? api('/admin/database/overview') : Promise.resolve(null),
     ]);
     const aiStatus = state.adminTab === 'ai' ? await api('/ai/status') : null;
@@ -958,18 +1024,14 @@ async function renderAdmin() {
         ? referenceEditor
         : state.adminTab === 'exercises'
         ? `${exerciseForm}
-            <table class="data-table responsive"><thead><tr><th>ID</th><th>動作</th><th>部位</th><th>難度</th><th>器材</th><th>狀態</th><th>操作</th></tr></thead><tbody>${exercises.items.map((item) => `<tr><td data-label="ID">${item.exercise_id}</td><td data-label="動作">${escapeHtml(item.exercise_name)}</td><td data-label="部位">${escapeHtml(item.body_part_name)}</td><td data-label="難度">${escapeHtml(item.difficulty_level)}</td><td data-label="器材">${escapeHtml(item.equipment || '-')}</td><td data-label="狀態"><span class="status status-${Number(item.is_active) ? 'active' : 'inactive'}">${Number(item.is_active) ? '啟用' : '停用'}</span></td><td data-label="操作"><div class="form-actions" style="margin-top:0"><button class="button button-small" data-action="edit-exercise" data-exercise-id="${item.exercise_id}">編輯</button>${Number(item.is_active) ? `<button class="button button-small button-danger" data-action="delete-exercise" data-exercise-id="${item.exercise_id}">停用</button>` : `<button class="button button-small" data-action="toggle-exercise" data-exercise-id="${item.exercise_id}" data-active="1">啟用</button>`}</div></td></tr>`).join('')}</tbody></table>`
-        : `<table class="data-table responsive"><thead><tr><th>ID</th><th>姓名</th><th>Email</th><th>身份</th><th>帳號狀態</th><th>建立時間</th><th>操作</th></tr></thead><tbody>${users.items.map((item) => {
-            const isSelf = Number(item.user_id) === Number(state.me?.user_id);
+            <table class="data-table responsive"><thead><tr><th>ID</th><th>動作</th><th>部位</th><th>難度</th><th>器材</th><th>狀態</th><th>操作</th></tr></thead><tbody>${exercises.items.map((item) => `<tr><td data-label="ID">${item.exercise_id}</td><td data-label="動作">${escapeHtml(item.exercise_name)}</td><td data-label="部位">${escapeHtml(item.body_part_name)}</td><td data-label="難度">${escapeHtml(item.difficulty_level)}</td><td data-label="器材">${escapeHtml(item.equipment || '-')}</td><td data-label="狀態"><span class="status status-${Number(item.is_active) ? 'active' : 'inactive'}">${Number(item.is_active) ? '啟用' : '停用'}</span></td><td data-label="操作"><div class="form-actions" style="margin-top:0"><button class="button button-small" data-action="edit-exercise" data-exercise-id="${item.exercise_id}">編輯</button>${Number(item.is_active) ? `<button class="button button-small button-danger" data-action="delete-exercise" data-exercise-id="${item.exercise_id}">停用</button>` : `<button class="button button-small" data-action="toggle-exercise" data-exercise-id="${item.exercise_id}" data-active="1">啟用</button>`}</div></td></tr>`).join('')}</tbody></table>${paginationMarkup(exercises, 'admin-exercise-page', '管理員動作分頁')}`
+        : `<div class="info-band">依規格，會員狀態只由會員本人以目前密碼停用；管理員清單為唯讀。</div><table class="data-table responsive"><thead><tr><th>ID</th><th>姓名</th><th>Email</th><th>身份</th><th>帳號狀態</th><th>建立時間</th></tr></thead><tbody>${users.items.map((item) => {
             const active = Number(item.is_active) === 1;
-            const action = isSelf
-                ? '<span class="section-copy">目前帳號</span>'
-                : `<button class="button button-small ${active ? 'button-danger' : ''}" data-action="toggle-user" data-user-id="${item.user_id}" data-active="${active ? 0 : 1}">${active ? '停用帳號' : '恢復帳號'}</button>`;
-            return `<tr><td data-label="ID">${item.user_id}</td><td data-label="姓名">${escapeHtml(item.name)}</td><td data-label="Email">${escapeHtml(item.email)}</td><td data-label="身份">${Number(item.is_admin) ? 'ADMIN' : 'USER'}</td><td data-label="狀態"><span class="status status-${active ? 'active' : 'inactive'}">${active ? '啟用' : '停用'}</span></td><td data-label="建立時間">${formatDateTime(item.created_at)}</td><td data-label="操作">${action}</td></tr>`;
-        }).join('')}</tbody></table>`;
+            return `<tr><td data-label="ID">${item.user_id}</td><td data-label="姓名">${escapeHtml(item.name)}</td><td data-label="Email">${escapeHtml(item.email)}</td><td data-label="身份">${Number(item.is_admin) ? 'ADMIN' : 'USER'}</td><td data-label="狀態"><span class="status status-${active ? 'active' : 'inactive'}">${active ? '啟用' : '停用'}</span></td><td data-label="建立時間">${formatDateTime(item.created_at)}</td></tr>`;
+        }).join('')}</tbody></table>${paginationMarkup(users, 'admin-user-page', '管理員會員分頁')}`;
     main.innerHTML = `
         <div class="page-shell">
-            <div class="page-header"><div><h1 class="page-title zh">管理後台</h1><p class="page-subtitle">管理會員與動作主資料，並檢視正式資料庫的結構、關聯與即時資料。</p></div></div>
+            <div class="page-header"><div><h1 class="page-title zh">管理後台</h1><p class="page-subtitle">檢視會員、維護動作與參考資料，並檢視正式資料庫的結構、關聯與即時資料。</p></div></div>
             <div class="admin-grid">
                 ${Object.entries({ users: '會員', exercises: '動作', plans: '課表', completed_workouts: '完成訓練', sets: '訓練組數' }).map(([key, label]) => `<div class="admin-stat"><span class="stat-label">${label}</span><strong>${formatNumber(stats[key])}</strong></div>`).join('')}
             </div>
@@ -991,7 +1053,7 @@ function renderAiSettings(status) {
                 <div><dt>AI_API_URL</dt><dd>${escapeHtml(status.endpoint_host || '等待設定')}</dd></div>
                 <div><dt>接口格式</dt><dd>${escapeHtml(status.provider)}</dd></div>
             </dl>
-            <p class="ai-settings-note">設定完成後，會員可在「我的課表」選擇 AI 規劃並輸入訓練需求。模型輸出仍須通過動作 ID、程度、天數、組次與休息時間驗證。</p>
+            <p class="ai-settings-note">LLM 排課依 SRS 列為後續擴充，預設不對會員啟用。啟用後模型輸出仍須通過動作 ID、程度、天數、組次與休息時間驗證。</p>
         </section>`;
 }
 
@@ -999,6 +1061,7 @@ function renderDatabaseSystem(overview, tableData) {
     const totalRows = overview.tables.reduce((sum, table) => sum + Number(table.row_count), 0);
     const previewColumns = tableData.columns.map((column) => column.column_name);
     return `
+        ${(overview.unexpected_tables || []).length ? `<div class="error-banner">偵測到規格外的 public 資料表：${(overview.unexpected_tables || []).map(escapeHtml).join('、')}。備份還原驗證會保持失敗，直到管理員確認來源。</div>` : ''}
         <section class="database-overview" aria-label="資料庫摘要">
             <div><span class="stat-label">DATABASE</span><strong>${escapeHtml(String(overview.driver).toUpperCase())}</strong><small>目前連線</small></div>
             <div><span class="stat-label">TABLES</span><strong>${overview.tables.length}</strong><small>核心資料表</small></div>
@@ -1011,12 +1074,16 @@ function renderDatabaseSystem(overview, tableData) {
                 ${overview.tables.map((table) => `<button class="database-table-button ${table.table_name === tableData.table_name ? 'is-active' : ''}" data-action="select-database-table" data-table="${table.table_name}"><span>${escapeHtml(table.table_name)}</span><strong>${formatNumber(table.row_count)}</strong></button>`).join('')}
             </aside>
             <div class="database-detail">
-                <div class="database-detail-heading"><div><h2>${escapeHtml(tableData.table_name)}</h2><p>${formatNumber(tableData.row_count)} 筆資料 · 唯讀預覽前 ${tableData.limit} 筆</p></div><span class="read-only-badge">READ ONLY</span></div>
+                <div class="database-detail-heading"><div><h2>${escapeHtml(tableData.table_name)}</h2><p>${formatNumber(tableData.row_count)} 筆資料 · ${tableData.rows_hidden_for_privacy ? '會員私密資料不提供跨帳號預覽' : `唯讀預覽前 ${tableData.limit} 筆`}</p></div><span class="read-only-badge">READ ONLY</span></div>
                 <div class="database-columns">
                     ${tableData.columns.map((column) => `<div><strong>${escapeHtml(column.column_name)}</strong><span>${escapeHtml(column.data_type)}</span><small>${column.is_primary_key ? 'PK ' : ''}${column.foreign_key ? `FK → ${escapeHtml(column.foreign_key)} ` : ''}${column.is_nullable ? 'NULL' : 'NOT NULL'}</small></div>`).join('')}
                 </div>
                 <div class="database-preview-scroll">
-                    ${tableData.rows.length ? `<table class="data-table database-preview"><thead><tr>${previewColumns.map((column) => `<th>${escapeHtml(column)}</th>`).join('')}</tr></thead><tbody>${tableData.rows.map((row) => `<tr>${previewColumns.map((column) => `<td>${escapeHtml(formatDatabaseValue(row[column]))}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '<div class="empty-state">這張表目前沒有資料。</div>'}
+                    ${tableData.rows_hidden_for_privacy
+                        ? '<div class="empty-state">依權限規格只顯示資料表結構與筆數，不顯示其他會員的資料列。</div>'
+                        : tableData.rows.length
+                        ? `<table class="data-table database-preview"><thead><tr>${previewColumns.map((column) => `<th>${escapeHtml(column)}</th>`).join('')}</tr></thead><tbody>${tableData.rows.map((row) => `<tr>${previewColumns.map((column) => `<td>${escapeHtml(formatDatabaseValue(row[column]))}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+                        : '<div class="empty-state">這張表目前沒有資料。</div>'}
                 </div>
             </div>
         </div>
@@ -1028,7 +1095,11 @@ function renderDatabaseSystem(overview, tableData) {
             <div><h2 class="section-heading">SQL DEMONSTRATION</h2><p class="section-copy">由後端執行固定的唯讀查詢，結果會隨正式資料更新。</p></div>
             <div class="query-list">${overview.query_examples.map((example) => {
                 const columns = example.rows.length ? Object.keys(example.rows[0]) : [];
-                return `<article class="query-example"><h3>${escapeHtml(example.title)}</h3><pre><code>${escapeHtml(example.sql)}</code></pre>${example.rows.length ? `<div class="database-preview-scroll"><table class="data-table"><thead><tr>${columns.map((column) => `<th>${escapeHtml(column)}</th>`).join('')}</tr></thead><tbody>${example.rows.map((row) => `<tr>${columns.map((column) => `<td>${escapeHtml(formatDatabaseValue(row[column]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="section-copy">目前沒有符合條件的資料。</p>'}</article>`;
+                return `<article class="query-example"><h3>${escapeHtml(example.title)}</h3><pre><code>${escapeHtml(example.sql)}</code></pre>${example.rows_hidden_for_privacy
+                    ? '<p class="section-copy">查詢語法保留作為資料庫設計範例；跨會員訓練結果依權限規格不在管理介面執行或顯示。</p>'
+                    : example.rows.length
+                    ? `<div class="database-preview-scroll"><table class="data-table"><thead><tr>${columns.map((column) => `<th>${escapeHtml(column)}</th>`).join('')}</tr></thead><tbody>${example.rows.map((row) => `<tr>${columns.map((column) => `<td>${escapeHtml(formatDatabaseValue(row[column]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+                    : '<p class="section-copy">目前沒有符合條件的資料。</p>'}</article>`;
             }).join('')}</div>
         </section>
         <section class="database-section">
@@ -1142,6 +1213,28 @@ document.addEventListener('click', async (event) => {
             state.exercisePage = Number(control.dataset.page);
             await renderExercises();
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (action === 'plan-page') {
+            state.planPage = Number(control.dataset.page);
+            state.selectedPlanId = null;
+            state.selectedDayIndex = 0;
+            state.planEditing = false;
+            await renderPlans();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (action === 'history-page') {
+            state.historyPage = Number(control.dataset.page);
+            state.historyDetailId = null;
+            await renderHistory();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (action === 'body-record-page') {
+            state.bodyRecordPage = Number(control.dataset.page);
+            await renderBodyRecordList();
+        } else if (action === 'admin-user-page') {
+            state.adminUserPage = Number(control.dataset.page);
+            await renderAdmin();
+        } else if (action === 'admin-exercise-page') {
+            state.adminExercisePage = Number(control.dataset.page);
+            state.adminEditingExerciseId = null;
+            await renderAdmin();
         } else if (action === 'logout') {
             await api('/auth/logout', { method: 'POST' });
             clearSession();
@@ -1151,6 +1244,7 @@ document.addEventListener('click', async (event) => {
         } else if (action === 'generate-plan') {
             control.disabled = true;
             const plan = await api('/plans/generate', { method: 'POST', body: JSON.stringify({}) });
+            state.planPage = 1;
             state.selectedPlanId = Number(plan.workout_plan_id);
             state.selectedDayIndex = 0;
             showToast('新的訓練課表已建立。');
@@ -1169,6 +1263,9 @@ document.addEventListener('click', async (event) => {
                 target_sets: Number(row.querySelector('.plan-sets').value),
                 target_reps: Number(row.querySelector('.plan-reps').value),
                 rest_seconds: Number(row.querySelector('.plan-rest').value),
+                target_weight_kg: row.querySelector('.plan-weight').value === ''
+                    ? null
+                    : row.querySelector('.plan-weight').value,
             }));
             if (new Set(exercises.map((item) => item.exercise_id)).size !== exercises.length) {
                 throw new Error('同一天不能安排重複動作，請重新選擇。');
@@ -1238,12 +1335,14 @@ document.addEventListener('click', async (event) => {
             if (reps === null) return;
             const weight = window.prompt('本次目標外加重量（kg，可填 0）', control.dataset.targetWeight || '0');
             if (weight === null) return;
+            const rest = window.prompt('本次休息秒數（0–600）', control.dataset.restSeconds);
+            if (rest === null) return;
             await api(`/workout-sessions/${control.dataset.sessionId}/exercises/${control.dataset.sessionExerciseId}`, {
                 method: 'PATCH',
                 body: JSON.stringify({
                     target_sets: Number(sets),
                     target_reps: Number(reps),
-                    rest_seconds: Number(control.dataset.restSeconds),
+                    rest_seconds: Number(rest),
                     target_weight_kg: weight,
                 }),
             });
@@ -1298,6 +1397,8 @@ document.addEventListener('click', async (event) => {
             showToast('歷史組數已刪除。');
             await renderHistory();
         } else if (action === 'edit-body-record') {
+            const date = window.prompt('輸入新的日期（YYYY-MM-DD）', control.dataset.date);
+            if (date === null) return;
             const weight = window.prompt('輸入新的體重（kg）', control.dataset.weight);
             if (weight === null) return;
             const notes = window.prompt('輸入備註', control.dataset.notes || '');
@@ -1305,7 +1406,7 @@ document.addEventListener('click', async (event) => {
             await api(`/body-records/${control.dataset.recordId}`, {
                 method: 'PATCH',
                 body: JSON.stringify({
-                    record_date: control.dataset.date,
+                    record_date: date,
                     weight_kg: Number(weight),
                     notes,
                 }),
@@ -1323,18 +1424,6 @@ document.addEventListener('click', async (event) => {
             await renderAdmin();
         } else if (action === 'select-database-table') {
             state.adminSelectedTable = control.dataset.table;
-            await renderAdmin();
-        } else if (action === 'toggle-user') {
-            const isActive = Number(control.dataset.active) === 1;
-            const message = isActive
-                ? '確定恢復這個會員帳號？恢復後對方可以重新登入。'
-                : '確定停用這個會員帳號？停用後對方無法登入，現有登入狀態也會立即失效。';
-            if (!window.confirm(message)) return;
-            await api(`/admin/users/${control.dataset.userId}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ is_active: isActive ? 1 : 0 }),
-            });
-            showToast(isActive ? '會員帳號已恢復啟用。' : '會員帳號已停用，現有登入狀態已失效。');
             await renderAdmin();
         } else if (action === 'toggle-exercise') {
             await api(`/admin/exercises/${control.dataset.exerciseId}`, {
@@ -1364,7 +1453,12 @@ document.addEventListener('click', async (event) => {
 });
 
 document.addEventListener('change', async (event) => {
-    if (event.target.matches('#plan-select')) {
+    if (event.target.matches('input[name="body_part_ids"]')) {
+        const id = Number(event.target.value);
+        state.bodyPartPriority = state.bodyPartPriority.filter((value) => value !== id);
+        if (event.target.checked) state.bodyPartPriority.push(id);
+        updateBodyPartPriorityText();
+    } else if (event.target.matches('#plan-select')) {
         state.selectedPlanId = Number(event.target.value);
         state.selectedDayIndex = 0;
         state.planEditing = false;
@@ -1441,6 +1535,7 @@ document.addEventListener('submit', async (event) => {
             await renderDashboard();
         } else if (form.id === 'history-filter-form') {
             state.historyFilters = values;
+            state.historyPage = 1;
             state.historyDetailId = null;
             await renderHistory();
         } else if (form.id === 'generate-plan-form') {
@@ -1472,10 +1567,11 @@ document.addEventListener('submit', async (event) => {
                     body: JSON.stringify({ plan_name: values.plan_name || null }),
                 });
             }
+            state.planPage = 1;
             state.selectedPlanId = Number(plan.workout_plan_id);
             state.selectedDayIndex = 0;
             state.planEditing = false;
-            showToast(manual ? '你的自訂課表已建立。' : '電腦已建立一份不同組合的訓練課表。');
+            showToast(manual ? '你的自訂課表已建立。' : '電腦已依固定規則建立訓練課表。');
             await renderPlans();
         } else if (form.id === 'profile-form') {
             state.me = await api('/me/profile', { method: 'PUT', body: JSON.stringify(values) });
@@ -1490,13 +1586,15 @@ document.addEventListener('submit', async (event) => {
             showToast('訓練設定已儲存。');
             await renderProfile();
         } else if (form.id === 'body-parts-form') {
-            const ids = [...form.querySelectorAll('input[name="body_part_ids"]:checked')].map((input) => Number(input.value));
+            const checked = new Set([...form.querySelectorAll('input[name="body_part_ids"]:checked')].map((input) => Number(input.value)));
+            const ids = state.bodyPartPriority.filter((id) => checked.has(id));
             state.me = await api('/me/body-parts', { method: 'PUT', body: JSON.stringify({ body_part_ids: ids }) });
             showToast('偏好部位已儲存。');
             await renderProfile();
         } else if (form.id === 'body-record-form') {
             await api('/body-records', { method: 'POST', body: JSON.stringify(values) });
             form.reset();
+            state.bodyRecordPage = 1;
             showToast('體重紀錄已新增。');
             await renderBodyRecordList();
         } else if (form.id === 'password-form') {

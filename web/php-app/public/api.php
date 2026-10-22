@@ -50,12 +50,18 @@ try {
     }
     echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (PDOException $error) {
-    $retryable = ['40P01', '55P03', '57014'];
-    if (in_array((string) $error->getCode(), $retryable, true)) {
+    $sqlState = (string) $error->getCode();
+    if (in_array($sqlState, ['40P01', '40001'], true)) {
+        http_response_code(409);
+        echo json_encode([
+            'code' => 'TRANSACTION_RETRY_REQUIRED',
+            'message' => '同時操作發生衝突，請重新載入後再試。',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } elseif (in_array($sqlState, ['55P03', '57014'], true)) {
         header('Retry-After: 1');
         http_response_code(503);
         echo json_encode([
-            'code' => 'DATABASE_RETRY_REQUIRED',
+            'code' => 'RETRY_LATER',
             'message' => '資料庫正在處理同時操作，請稍候重試。',
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     } else {

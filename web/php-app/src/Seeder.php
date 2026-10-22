@@ -28,7 +28,15 @@ final class Seeder
 
     public static function seed(PDO $pdo): void
     {
-        $pdo->beginTransaction();
+        $demoPassword = Config::get('DEMO_BOOTSTRAP_PASSWORD', 'Demo123456') ?? '';
+        $adminPassword = Config::get('DEMO_ADMIN_PASSWORD') ?? '';
+        if (!self::validPassword($demoPassword) || !self::validPassword($adminPassword)) {
+            throw new \RuntimeException(
+                '示範會員與管理員密碼必須是 10 至 72 bytes、包含英文字母與數字、且不得含 NUL。'
+            );
+        }
+
+        Database::beginTransaction($pdo);
         try {
             $goalStatement = $pdo->prepare(
                 'INSERT INTO training_goals (goal_name, description) VALUES (?, ?)'
@@ -43,14 +51,15 @@ final class Seeder
             foreach (self::BODY_PARTS as $part) {
                 $partStatement->execute($part);
             }
+            self::seedExercises($pdo);
+            self::seedDemoAccounts($pdo, $demoPassword, $adminPassword);
             $pdo->commit();
         } catch (\Throwable $error) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             throw $error;
         }
-
-        self::seedExercises($pdo);
-        self::seedDemoAccounts($pdo);
     }
 
     /**
@@ -295,7 +304,7 @@ final class Seeder
         return $exerciseId;
     }
 
-    private static function seedDemoAccounts(PDO $pdo): void
+    private static function seedDemoAccounts(PDO $pdo, string $demoPassword, string $adminPassword): void
     {
         $goalId = (int) $pdo->query(
             "SELECT training_goal_id FROM training_goals WHERE goal_name='Muscle Gain'"
@@ -326,14 +335,29 @@ final class Seeder
             return $userId;
         };
 
-        $demoPassword = Config::get('DEMO_BOOTSTRAP_PASSWORD', 'Demo12345') ?? '';
-        $adminPassword = Config::get('DEMO_ADMIN_PASSWORD');
-        if (strlen($demoPassword) < 8 || $adminPassword === null || strlen($adminPassword) < 8) {
-            throw new \RuntimeException('示範會員密碼至少需要 8 個字元，且必須設定管理員環境變數 DEMO_ADMIN_PASSWORD。');
+        $findUser = $pdo->prepare('SELECT user_id FROM user_auth WHERE email = ?');
+        $findUser->execute(['demo@fittrack.local']);
+        $demoUserId = (int) $findUser->fetchColumn();
+        $createdDemo = $demoUserId === 0;
+        if ($createdDemo) {
+            $demoUserId = $createUser('示範會員', 'demo@fittrack.local', $demoPassword, false);
         }
 
-        $demoUserId = $createUser('示範會員', 'demo@fittrack.local', $demoPassword, false);
-        $createUser('系統管理員', 'admin@fittrack.local', $adminPassword, true);
+        $findUser->execute(['admin@fittrack.local']);
+        $adminUserId = (int) $findUser->fetchColumn();
+        if ($adminUserId === 0) {
+            $adminUserId = $createUser('系統管理員', 'admin@fittrack.local', $adminPassword, true);
+        } else {
+            $isAdmin = $pdo->prepare('SELECT 1 FROM admins WHERE user_id = ?');
+            $isAdmin->execute([$adminUserId]);
+            if (!$isAdmin->fetchColumn()) {
+                $pdo->prepare('INSERT INTO admins (user_id) VALUES (?)')->execute([$adminUserId]);
+            }
+        }
+
+        if (!$createdDemo) {
+            return;
+        }
 
         $parts = $pdo->query(
             "SELECT body_part_id FROM body_parts WHERE body_part_name IN ('Chest', 'Back', 'Legs', 'Core') ORDER BY body_part_id"
@@ -350,5 +374,47 @@ final class Seeder
         $pdo->prepare(
             'UPDATE users SET profile_completed_at = CURRENT_TIMESTAMP WHERE user_id = ?'
         )->execute([$demoUserId]);
+    }
+
+    public static function validPassword(string $password): bool
+    {
+        $length = strlen($password);
+        return $length >= 10
+            && $length <= 72
+            && !str_contains($password, "\0")
+            && preg_match('/[A-Za-z]/', $password) === 1
+            && preg_match('/\d/', $password) === 1;
+    }
+
+    public static function ensureDemoAccounts(PDO $pdo): void
+    {
+        $demoPassword = Config::get('DEMO_BOOTSTRAP_PASSWORD', 'Demo123456') ?? '';
+        $adminPassword = Config::get('DEMO_ADMIN_PASSWORD') ?? '';
+        $lookup = $pdo->prepare('SELECT 1 FROM user_auth WHERE email = ?');
+        $lookup->execute(['demo@fittrack.local']);
+        $demoMissing = !$lookup->fetchColumn();
+        $lookup->execute(['admin@fittrack.local']);
+        $adminMissing = !$lookup->fetchColumn();
+        if (($demoMissing && !self::validPassword($demoPassword))
+            || ($adminMissing && !self::validPassword($adminPassword))) {
+            throw new \RuntimeException(
+                '示範會員與管理員密碼必須是 10 至 72 bytes、包含英文字母與數字、且不得含 NUL。'
+            );
+        }
+        $ownsTransaction = !$pdo->inTransaction();
+        if ($ownsTransaction) {
+            Database::beginTransaction($pdo);
+        }
+        try {
+            self::seedDemoAccounts($pdo, $demoPassword, $adminPassword);
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
+        } catch (\Throwable $error) {
+            if ($ownsTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $error;
+        }
     }
 }

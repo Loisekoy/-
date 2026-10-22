@@ -98,10 +98,22 @@ final class RequestSecurity
         }
         $candidate = $origin !== '' ? $origin : $referer;
         $parts = parse_url($candidate);
-        if (!$parts || strtolower((string) ($parts['host'] ?? '')) !== strtolower(explode(':', $host)[0])) {
+        $expected = parse_url('http://' . $host);
+        if (!$parts || !$expected) {
             throw new ApiException(403, 'ORIGIN_REJECTED', '不允許跨網站送出這個要求。');
         }
-        if (Config::isProduction() && strtolower((string) ($parts['scheme'] ?? '')) !== 'https') {
+        $expectedScheme = Config::isProduction()
+            ? 'https'
+            : (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http');
+        $candidateScheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $candidatePort = (int) ($parts['port'] ?? ($candidateScheme === 'https' ? 443 : 80));
+        $expectedPort = (int) ($expected['port'] ?? ($expectedScheme === 'https' ? 443 : 80));
+        if (strtolower((string) ($parts['host'] ?? '')) !== strtolower((string) ($expected['host'] ?? ''))
+            || $candidateScheme !== $expectedScheme
+            || $candidatePort !== $expectedPort) {
+            throw new ApiException(403, 'ORIGIN_REJECTED', '不允許跨網站送出這個要求。');
+        }
+        if (Config::isProduction() && $candidateScheme !== 'https') {
             throw new ApiException(403, 'HTTPS_REQUIRED', '正式環境只接受 HTTPS 來源。');
         }
     }

@@ -16,9 +16,12 @@ final class AiPlanGenerator
         $model = trim(Config::get('AI_MODEL', '') ?? '');
         $endpoint = trim(Config::get('AI_API_URL', self::DEFAULT_ENDPOINT) ?? '');
         $host = $endpoint === '' ? null : parse_url($endpoint, PHP_URL_HOST);
+        $featureEnabled = strtolower(Config::get('AI_FEATURE_ENABLED', 'false') ?? 'false') === 'true';
 
         return [
-            'enabled' => $apiKey !== '' && $model !== '' && filter_var($endpoint, FILTER_VALIDATE_URL) !== false,
+            'enabled' => $featureEnabled && $apiKey !== '' && $model !== ''
+                && filter_var($endpoint, FILTER_VALIDATE_URL) !== false,
+            'feature_enabled' => $featureEnabled,
             'provider' => 'OpenAI-compatible Chat Completions',
             'model' => $model !== '' ? $model : null,
             'endpoint_host' => is_string($host) ? $host : null,
@@ -37,7 +40,7 @@ final class AiPlanGenerator
             throw new ApiException(
                 503,
                 'AI_NOT_CONFIGURED',
-                '模型接口尚未設定完成，請先在 Render 填入 API Key、模型名稱與 API 網址。'
+                'LLM 排課是後續擴充功能；需明確啟用並完成模型設定後才能使用。'
             );
         }
 
@@ -87,7 +90,16 @@ final class AiPlanGenerator
             . '天數與每一天動作數必須完全符合 required_output，同一天不可重複動作。';
         $payload = self::requestModel($systemPrompt, $context);
 
-        return self::savePlan($pdo, $userId, $user, $exercises, $payload, $requestedName, $exerciseLimit);
+        return self::savePlan(
+            $pdo,
+            $userId,
+            $user,
+            $preferences,
+            $exercises,
+            $payload,
+            $requestedName,
+            $exerciseLimit
+        );
     }
 
     private static function planningContext(PDO $pdo, int $userId): array
@@ -130,7 +142,7 @@ final class AiPlanGenerator
         }
 
         $rank = ['Beginner' => 1, 'Intermediate' => 2, 'Advanced' => 3][(string) $user['training_experience']] ?? 1;
-        $exerciseStatement = $pdo->prepare(
+        $exerciseSql =
             'SELECT e.exercise_id, ev.exercise_version_id, ev.exercise_name, ev.difficulty_level, ev.equipment, bp.body_part_name '
             . 'FROM exercises e JOIN exercise_versions ev ON ev.exercise_id = e.exercise_id '
             . 'JOIN body_parts bp ON bp.body_part_id = e.body_part_id '
@@ -138,8 +150,11 @@ final class AiPlanGenerator
             . '(SELECT MAX(v2.version_no) FROM exercise_versions v2 WHERE v2.exercise_id = e.exercise_id) '
             . "AND CASE ev.difficulty_level "
             . "WHEN 'Beginner' THEN 1 WHEN 'Intermediate' THEN 2 ELSE 3 END <= ? "
-            . 'ORDER BY bp.body_part_id, e.exercise_id'
-        );
+            . 'ORDER BY bp.body_part_id, e.exercise_id';
+        if ((string) $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql' && $pdo->inTransaction()) {
+            $exerciseSql .= ' FOR SHARE OF e';
+        }
+        $exerciseStatement = $pdo->prepare($exerciseSql);
         $exerciseStatement->execute([$rank]);
         $exercises = $exerciseStatement->fetchAll();
         if (count($exercises) < 3) {
@@ -222,6 +237,7 @@ final class AiPlanGenerator
         PDO $pdo,
         int $userId,
         array $user,
+        array $preferences,
         array $allowedExercises,
         array $payload,
         ?string $requestedName,
@@ -235,7 +251,10 @@ final class AiPlanGenerator
 
         $planName = trim((string) $requestedName);
         if ($planName === '') {
-            $planName = trim((string) ($payload['plan_name'] ?? ''));
+            if (!is_string($payload['plan_name'] ?? null)) {
+                throw new ApiException(502, 'AI_PLAN_INVALID', '模型回傳的課表名稱不是字串。');
+            }
+            $planName = trim($payload['plan_name']);
         }
         if ($planName === '' || mb_strlen($planName) > 120) {
             throw new ApiException(502, 'AI_PLAN_INVALID', '模型回傳的課表名稱不符合格式。');
@@ -246,27 +265,31 @@ final class AiPlanGenerator
             $allowedIds[(int) $exercise['exercise_id']] = (int) $exercise['exercise_version_id'];
         }
         $validatedDays = [];
+        $seen = [];
         foreach ($days as $dayIndex => $day) {
             if (!is_array($day)) {
                 throw new ApiException(502, 'AI_PLAN_INVALID', '模型回傳的訓練日格式不正確。');
             }
-            $title = trim((string) ($day['title'] ?? ''));
+            if (!is_string($day['title'] ?? null)) {
+                throw new ApiException(502, 'AI_PLAN_INVALID', '模型回傳的訓練日名稱不是字串。');
+            }
+            $title = trim($day['title']);
             $items = $day['exercises'] ?? null;
             if ($title === '' || mb_strlen($title) > 100 || !is_array($items)
                 || count($items) < 3 || count($items) > $exerciseLimit) {
                 throw new ApiException(502, 'AI_PLAN_INVALID', '模型回傳的訓練日內容不符合規則。');
             }
-            $seen = [];
             $validatedItems = [];
             foreach ($items as $item) {
                 if (!is_array($item)) {
                     throw new ApiException(502, 'AI_PLAN_INVALID', '模型回傳的動作格式不正確。');
                 }
-                $exerciseId = (int) ($item['exercise_id'] ?? 0);
-                $sets = (int) ($item['target_sets'] ?? 0);
-                $reps = (int) ($item['target_reps'] ?? 0);
-                $rest = (int) ($item['rest_seconds'] ?? -1);
-                if (!isset($allowedIds[$exerciseId]) || isset($seen[$exerciseId])
+                $exerciseId = self::modelInteger($item['exercise_id'] ?? null);
+                $sets = self::modelInteger($item['target_sets'] ?? null);
+                $reps = self::modelInteger($item['target_reps'] ?? null);
+                $rest = self::modelInteger($item['rest_seconds'] ?? null);
+                if ($exerciseId === null || $sets === null || $reps === null || $rest === null
+                    || !isset($allowedIds[$exerciseId]) || isset($seen[$exerciseId])
                     || $sets < 1 || $sets > 10 || $reps < 1 || $reps > 50
                     || $rest < 0 || $rest > 300) {
                     throw new ApiException(502, 'AI_PLAN_INVALID', '模型課表包含無效或重複的動作資料。');
@@ -279,6 +302,24 @@ final class AiPlanGenerator
 
         Database::beginTransaction($pdo);
         try {
+            $lockSql = 'SELECT user_id FROM users WHERE user_id = ?';
+            if ((string) $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql') {
+                $lockSql .= ' FOR UPDATE';
+            }
+            $lock = $pdo->prepare($lockSql);
+            $lock->execute([$userId]);
+            if (!$lock->fetchColumn()) {
+                throw new ApiException(404, 'USER_NOT_FOUND', '找不到使用者。');
+            }
+            [$freshUser, $freshPreferences, $freshExercises] = self::planningContext($pdo, $userId);
+            if (self::contextFingerprint($user, $preferences, $allowedExercises)
+                !== self::contextFingerprint($freshUser, $freshPreferences, $freshExercises)) {
+                throw new ApiException(
+                    409,
+                    'PLANNING_CONTEXT_CHANGED',
+                    '模型思考期間會員設定或動作資料已改變，請重新產生課表。'
+                );
+            }
             $planId = Database::insert(
                 $pdo,
                 'INSERT INTO workout_plans (user_id, plan_name) VALUES (?, ?)',
@@ -336,5 +377,29 @@ final class AiPlanGenerator
             }
             throw $error;
         }
+    }
+
+    private static function contextFingerprint(array $user, array $preferences, array $exercises): string
+    {
+        $userSnapshot = [];
+        foreach ([
+            'training_goal_id', 'age', 'height_cm', 'weight_kg_snapshot', 'weight_record_date',
+            'training_experience', 'training_days_per_week', 'training_duration_minutes',
+        ] as $field) {
+            $userSnapshot[$field] = (string) ($user[$field] ?? '');
+        }
+        $exerciseSnapshot = array_map(static fn (array $exercise): array => [
+            (int) $exercise['exercise_id'],
+            (int) $exercise['exercise_version_id'],
+        ], $exercises);
+        return hash('sha256', json_encode(
+            [$userSnapshot, array_values($preferences), $exerciseSnapshot],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+        ));
+    }
+
+    private static function modelInteger(mixed $value): ?int
+    {
+        return is_int($value) ? $value : null;
     }
 }

@@ -31,6 +31,13 @@ final class Api
         'workout_sets',
     ];
 
+    private const DATABASE_PREVIEW_TABLES = [
+        'training_goals',
+        'body_parts',
+        'exercises',
+        'exercise_versions',
+    ];
+
     private const DATABASE_RELATIONSHIPS = [
         ['user_auth', 'user_id', 'users', 'user_id', 'User 1:1 User_Auth', 'CASCADE'],
         ['user_sessions', 'auth_id', 'user_auth', 'auth_id', 'User_Auth 1:N User_Session', 'CASCADE'],
@@ -142,7 +149,7 @@ final class Api
             return [200, $this->exerciseHistory((int) $user['user_id'], (int) $matches[1])];
         }
         if ($method === 'GET' && $path === '/plans') {
-            return [200, ['items' => PlanGenerator::listPlans($this->pdo, (int) $user['user_id'])]];
+            return [200, $this->plans((int) $user['user_id'])];
         }
         if ($method === 'GET' && $path === '/ai/status') {
             return [200, AiPlanGenerator::status()];
@@ -159,7 +166,7 @@ final class Api
             return [201, PlanGenerator::generate(
                 $this->pdo,
                 (int) $user['user_id'],
-                isset($input['plan_name']) ? (string) $input['plan_name'] : null
+                $this->optionalStringField($input, 'plan_name')
             )];
         }
         if ($method === 'POST' && $path === '/plans/manual') {
@@ -167,8 +174,14 @@ final class Api
             return [201, PlanGenerator::createManual(
                 $this->pdo,
                 (int) $user['user_id'],
-                isset($input['plan_name']) ? (string) $input['plan_name'] : null,
-                is_array($input['days'] ?? null) ? $input['days'] : []
+                $this->optionalStringField($input, 'plan_name'),
+                is_array($input['days'] ?? null) ? $input['days'] : throw new ApiException(
+                    422,
+                    'INVALID_DAYS',
+                    'days 必須是陣列。',
+                    [],
+                    ['days' => '必須是陣列。']
+                )
             )];
         }
         if ($method === 'POST' && $path === '/plans/ai-generate') {
@@ -176,8 +189,8 @@ final class Api
             return [201, AiPlanGenerator::generate(
                 $this->pdo,
                 (int) $user['user_id'],
-                isset($input['plan_name']) ? (string) $input['plan_name'] : null,
-                isset($input['focus']) ? (string) $input['focus'] : null
+                $this->optionalStringField($input, 'plan_name'),
+                $this->optionalStringField($input, 'focus')
             )];
         }
         if (preg_match('#^/plans/(\d+)$#', $path, $matches) && $method === 'PATCH') {
@@ -220,7 +233,7 @@ final class Api
                 (int) $user['user_id'],
                 (int) $matches[1],
                 $matches[2] === 'complete' ? 'completed' : 'cancelled',
-                (string) ($input['notes'] ?? '')
+                $this->optionalStringField($input, 'notes') ?? ''
             )];
         }
         if (preg_match('#^/workout-sessions/(\d+)$#', $path, $matches) && $method === 'DELETE') {
@@ -261,10 +274,6 @@ final class Api
             }
             if ($method === 'GET' && $path === '/admin/users') {
                 return [200, $this->adminUsers()];
-            }
-            if (preg_match('#^/admin/users/(\d+)$#', $path, $matches) && $method === 'PATCH') {
-                $this->assertAllowedFields($input, ['is_active']);
-                return [200, $this->updateAdminUser((int) $matches[1], $input, $user)];
             }
             if ($method === 'GET' && $path === '/admin/exercises') {
                 return [200, $this->adminExercises()];
@@ -309,6 +318,21 @@ final class Api
         ];
     }
 
+    private function plans(int $userId): array
+    {
+        [$page, $pageSize, $offset] = $this->pagination();
+        $count = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM workout_plans WHERE user_id = ? AND archived_at IS NULL'
+        );
+        $count->execute([$userId]);
+        return [
+            'items' => PlanGenerator::listPlans($this->pdo, $userId, $pageSize, $offset),
+            'page' => $page,
+            'page_size' => $pageSize,
+            'total' => (int) $count->fetchColumn(),
+        ];
+    }
+
     private function profile(int $userId): array
     {
         $statement = $this->pdo->prepare(
@@ -343,11 +367,11 @@ final class Api
 
     private function updateProfile(int $userId, array $input): array
     {
-        $name = trim((string) ($input['name'] ?? ''));
+        $name = trim($this->requiredStringField($input, 'name'));
         $gender = $input['gender'] ?? null;
         $age = $this->strictInteger($input['age'] ?? null);
         $height = $this->decimal($input['height_cm'] ?? null, false);
-        $experience = (string) ($input['training_experience'] ?? '');
+        $experience = $this->requiredStringField($input, 'training_experience');
         $weight = $this->decimal($input['weight_kg'] ?? null, false);
 
         if ($name === '' || mb_strlen($name) > 100) {
@@ -371,6 +395,7 @@ final class Api
 
         Database::beginTransaction($this->pdo);
         try {
+            $this->lockUser($userId);
             $this->pdo->prepare(
                 'UPDATE users SET name = ?, gender = ?, age = ?, height_cm = ?, training_experience = ? '
                 . 'WHERE user_id = ?'
@@ -540,7 +565,7 @@ final class Api
         $plan = PlanGenerator::findPlan($this->pdo, $userId, $planId);
         $this->assertPlanNotActive($userId, $planId);
         $planName = array_key_exists('plan_name', $input)
-            ? trim((string) $input['plan_name'])
+            ? trim($this->requiredStringField($input, 'plan_name'))
             : (string) $plan['plan_name'];
         if ($planName === '' || mb_strlen($planName) > 120) {
             throw new ApiException(422, 'INVALID_PLAN_NAME', '課表名稱需為 1 至 120 個字。');
@@ -556,7 +581,7 @@ final class Api
                 'UPDATE workout_plans SET plan_name = ? WHERE workout_plan_id = ? AND user_id = ?'
             )->execute([$planName, $planId, $userId]);
             $ownership = $this->pdo->prepare(
-                'SELECT pe.plan_exercise_id FROM plan_exercises pe '
+                'SELECT pe.plan_exercise_id, pe.target_weight_kg FROM plan_exercises pe '
                 . 'JOIN plan_days pd ON pd.plan_day_id = pe.plan_day_id '
                 . 'JOIN workout_plans wp ON wp.workout_plan_id = pd.workout_plan_id '
                 . 'WHERE pe.plan_exercise_id = ? AND wp.workout_plan_id = ? AND wp.user_id = ?'
@@ -585,7 +610,8 @@ final class Api
                 }
                 $seen[] = $planExerciseId;
                 $ownership->execute([$planExerciseId, $planId, $userId]);
-                if (!$ownership->fetchColumn()) {
+                $ownedExercise = $ownership->fetch();
+                if (!$ownedExercise) {
                     throw new ApiException(404, 'PLAN_EXERCISE_NOT_FOUND', '找不到課表中的動作。');
                 }
                 $exerciseId = $this->strictInteger($item['exercise_id'] ?? null);
@@ -593,8 +619,12 @@ final class Api
                 $reps = $this->strictInteger($item['target_reps'] ?? null);
                 $rest = $this->strictInteger($item['rest_seconds'] ?? null);
                 $targetWeight = array_key_exists('target_weight_kg', $item)
-                    ? $this->decimal($item['target_weight_kg'], true)
-                    : null;
+                    ? (($item['target_weight_kg'] === null || $item['target_weight_kg'] === '')
+                        ? null
+                        : $this->decimal($item['target_weight_kg'], true))
+                    : ($ownedExercise['target_weight_kg'] === null
+                        ? null
+                        : (float) $ownedExercise['target_weight_kg']);
                 if ($exerciseId === false || $sets === false || $reps === false || $rest === false) {
                     throw new ApiException(422, 'INVALID_PLAN_EXERCISE', '課表動作、組次或休息時間必須是整數。');
                 }
@@ -778,7 +808,11 @@ final class Api
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
-            if ($error->getCode() === '23505' || str_contains($error->getMessage(), 'uq_workout_sessions_user_active')) {
+            $message = strtolower($error->getMessage());
+            $activeConstraint = str_contains($message, 'uq_workout_sessions_user_active')
+                || (Database::driver() === 'sqlite'
+                    && str_contains($message, 'workout_sessions.user_id'));
+            if ($activeConstraint) {
                 $active = $this->currentSession($userId);
                 if ($active !== null && (int) $active['plan_day_id'] === (int) $planDayId) {
                     return [200, $active];
@@ -945,7 +979,9 @@ final class Api
             $reps = $this->strictInteger($input['target_reps'] ?? $item['target_reps']);
             $rest = $this->strictInteger($input['rest_seconds'] ?? $item['rest_seconds']);
             $weight = array_key_exists('target_weight_kg', $input)
-                ? $this->decimal($input['target_weight_kg'], true)
+                ? (($input['target_weight_kg'] === null || $input['target_weight_kg'] === '')
+                    ? null
+                    : $this->decimal($input['target_weight_kg'], true))
                 : ($item['target_weight_kg'] === null ? null : (float) $item['target_weight_kg']);
             $completed = $this->pdo->prepare('SELECT COUNT(*) FROM workout_sets WHERE workout_session_exercise_id = ?');
             $completed->execute([$sessionExerciseId]);
@@ -1301,19 +1337,23 @@ final class Api
 
     private function bodyRecords(int $userId): array
     {
+        [$page, $pageSize, $offset] = $this->pagination();
+        $count = $this->pdo->prepare('SELECT COUNT(*) FROM body_records WHERE user_id = ?');
+        $count->execute([$userId]);
         $statement = $this->pdo->prepare(
-            'SELECT * FROM body_records WHERE user_id = ? ORDER BY record_date DESC, body_record_id DESC'
+            'SELECT * FROM body_records WHERE user_id = ? '
+            . "ORDER BY record_date DESC, body_record_id DESC LIMIT {$pageSize} OFFSET {$offset}"
         );
         $statement->execute([$userId]);
         $items = $statement->fetchAll();
-        return ['items' => $items, 'page' => 1, 'page_size' => count($items), 'total' => count($items)];
+        return ['items' => $items, 'page' => $page, 'page_size' => $pageSize, 'total' => (int) $count->fetchColumn()];
     }
 
     private function createBodyRecord(int $userId, array $input): array
     {
-        $date = (string) ($input['record_date'] ?? '');
+        $date = $this->requiredStringField($input, 'record_date');
         $weight = $this->decimal($input['weight_kg'] ?? null, false);
-        $notes = trim((string) ($input['notes'] ?? ''));
+        $notes = trim($this->optionalStringField($input, 'notes') ?? '');
         $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
         if (!$parsedDate || $parsedDate->format('Y-m-d') !== $date
             || $date < '1900-01-01' || $date > date('Y-m-d')) {
@@ -1322,27 +1362,38 @@ final class Api
         if ($weight === false || $weight < 20 || $weight > 500 || mb_strlen($notes) > 1000) {
             throw new ApiException(422, 'INVALID_BODY_RECORD', '體重或備註不正確。');
         }
-        $exists = $this->pdo->prepare(
-            'SELECT 1 FROM body_records WHERE user_id = ? AND record_date = ?'
-        );
-        $exists->execute([$userId, $date]);
-        if ($exists->fetchColumn()) {
-            throw new ApiException(409, 'BODY_RECORD_EXISTS', '這一天已有體重紀錄。');
-        }
+        Database::beginTransaction($this->pdo);
         try {
+            $this->lockUser($userId);
+            $exists = $this->pdo->prepare(
+                'SELECT 1 FROM body_records WHERE user_id = ? AND record_date = ?'
+            );
+            $exists->execute([$userId, $date]);
+            if ($exists->fetchColumn()) {
+                throw new ApiException(409, 'BODY_RECORD_EXISTS', '這一天已有體重紀錄。');
+            }
             $bodyRecordId = Database::insert(
                 $this->pdo,
                 'INSERT INTO body_records (user_id, record_date, weight_kg, notes) VALUES (?, ?, ?, ?)',
                 [$userId, $date, $weight, $notes === '' ? null : $notes],
                 'body_record_id'
             );
+            $this->syncProfileCompletion($userId);
+            $this->pdo->commit();
         } catch (\PDOException $error) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             if ($this->isUniqueViolation($error)) {
                 throw new ApiException(409, 'BODY_RECORD_EXISTS', '這一天已有體重紀錄。');
             }
             throw $error;
+        } catch (\Throwable $error) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $error;
         }
-        $this->syncProfileCompletion($userId);
         return [
             'body_record_id' => $bodyRecordId,
             'user_id' => $userId,
@@ -1362,9 +1413,13 @@ final class Api
         if (!$record) {
             throw new ApiException(404, 'BODY_RECORD_NOT_FOUND', '找不到這筆體重紀錄。');
         }
-        $date = (string) ($input['record_date'] ?? $record['record_date']);
+        $date = array_key_exists('record_date', $input)
+            ? $this->requiredStringField($input, 'record_date')
+            : (string) $record['record_date'];
         $weight = $this->decimal($input['weight_kg'] ?? $record['weight_kg'], false);
-        $notes = (string) ($input['notes'] ?? $record['notes'] ?? '');
+        $notes = array_key_exists('notes', $input)
+            ? ($this->optionalStringField($input, 'notes') ?? '')
+            : (string) ($record['notes'] ?? '');
         $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
         if (!$parsedDate || $parsedDate->format('Y-m-d') !== $date
             || $date < '1900-01-01' || $date > date('Y-m-d')
@@ -1445,84 +1500,39 @@ final class Api
 
     private function adminUsers(): array
     {
-        return ['items' => $this->pdo->query(
+        [$page, $pageSize, $offset] = $this->pagination();
+        $total = (int) $this->pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+        return [
+            'items' => $this->pdo->query(
             'SELECT u.user_id, u.name, ua.email, ua.is_active, u.created_at, '
             . 'CASE WHEN a.user_id IS NULL THEN 0 ELSE 1 END AS is_admin '
             . 'FROM users u JOIN user_auth ua ON ua.user_id = u.user_id '
-            . 'LEFT JOIN admins a ON a.user_id = u.user_id ORDER BY u.created_at DESC'
-        )->fetchAll()];
-    }
-
-    private function updateAdminUser(int $targetUserId, array $input, array $admin): array
-    {
-        if (!array_key_exists('is_active', $input)) {
-            throw new ApiException(422, 'NO_FIELDS', '沒有可更新的欄位。');
-        }
-        $activeValue = $input['is_active'];
-        $isActive = is_bool($activeValue)
-            ? $activeValue
-            : (is_int($activeValue) && in_array($activeValue, [0, 1], true) ? (bool) $activeValue : null);
-        if ($isActive === null) {
-            throw new ApiException(422, 'INVALID_ACCOUNT_STATUS', '帳號狀態必須是啟用或停用。');
-        }
-        if ($targetUserId < 1 || $targetUserId === (int) ($admin['user_id'] ?? 0)) {
-            throw new ApiException(409, 'CANNOT_CHANGE_SELF', '管理員不能在這裡修改自己的帳號狀態。');
-        }
-
-        Database::beginTransaction($this->pdo);
-        try {
-            $lockSql = 'SELECT u.user_id, ua.auth_id FROM users u JOIN user_auth ua ON ua.user_id = u.user_id WHERE u.user_id = ?';
-            if (Database::driver() === 'pgsql') {
-                $lockSql .= ' FOR UPDATE';
-            }
-            $target = $this->pdo->prepare($lockSql);
-            $target->execute([$targetUserId]);
-            $row = $target->fetch();
-            if (!$row) {
-                throw new ApiException(404, 'USER_NOT_FOUND', '找不到這個使用者。');
-            }
-
-            $activeSql = $isActive ? 'TRUE' : 'FALSE';
-            $this->pdo->prepare("UPDATE user_auth SET is_active = {$activeSql} WHERE auth_id = ?")
-                ->execute([(int) $row['auth_id']]);
-            if (!$isActive) {
-                $this->pdo->prepare(
-                    'UPDATE user_sessions SET revoked_at = CURRENT_TIMESTAMP '
-                    . 'WHERE auth_id = ? AND revoked_at IS NULL'
-                )->execute([(int) $row['auth_id']]);
-            }
-            $this->pdo->commit();
-        } catch (\Throwable $error) {
-            if ($this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
-            }
-            throw $error;
-        }
-
-        $statement = $this->pdo->prepare(
-            'SELECT u.user_id, u.name, ua.email, ua.is_active, u.created_at, '
-            . 'CASE WHEN a.user_id IS NULL THEN 0 ELSE 1 END AS is_admin '
-            . 'FROM users u JOIN user_auth ua ON ua.user_id = u.user_id '
-            . 'LEFT JOIN admins a ON a.user_id = u.user_id WHERE u.user_id = ?'
-        );
-        $statement->execute([$targetUserId]);
-        $updated = $statement->fetch();
-        if (!$updated) {
-            throw new ApiException(404, 'USER_NOT_FOUND', '找不到這個使用者。');
-        }
-        return $updated;
+            . 'LEFT JOIN admins a ON a.user_id = u.user_id '
+            . "ORDER BY u.created_at DESC, u.user_id DESC LIMIT {$pageSize} OFFSET {$offset}"
+        )->fetchAll(),
+            'page' => $page,
+            'page_size' => $pageSize,
+            'total' => $total,
+        ];
     }
 
     private function adminExercises(): array
     {
-        return ['items' => $this->pdo->query(
+        [$page, $pageSize, $offset] = $this->pagination();
+        $total = (int) $this->pdo->query('SELECT COUNT(*) FROM exercises')->fetchColumn();
+        return [
+            'items' => $this->pdo->query(
             'SELECT e.exercise_id, e.body_part_id, e.is_active, ev.exercise_version_id, ev.version_no, '
             . 'ev.exercise_name, ev.difficulty_level, ev.equipment, ev.description, ev.image_url, bp.body_part_name '
             . 'FROM exercises e JOIN exercise_versions ev ON ev.exercise_id = e.exercise_id '
             . 'JOIN body_parts bp ON bp.body_part_id = e.body_part_id '
             . 'WHERE ev.version_no = (SELECT MAX(v2.version_no) FROM exercise_versions v2 WHERE v2.exercise_id = e.exercise_id) '
-            . 'ORDER BY e.exercise_id'
-        )->fetchAll()];
+            . "ORDER BY e.exercise_id LIMIT {$pageSize} OFFSET {$offset}"
+        )->fetchAll(),
+            'page' => $page,
+            'page_size' => $pageSize,
+            'total' => $total,
+        ];
     }
 
     private function databaseOverview(): array
@@ -1544,9 +1554,22 @@ final class Api
             'on_delete' => $item[5],
         ], self::DATABASE_RELATIONSHIPS);
 
+        if (Database::driver() === 'pgsql') {
+            $actualTables = $this->pdo->query(
+                "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"
+            )->fetchAll(PDO::FETCH_COLUMN);
+        } else {
+            $actualTables = $this->pdo->query(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            )->fetchAll(PDO::FETCH_COLUMN);
+        }
+        $expectedTables = [...self::DATABASE_TABLES, 'schema_migrations'];
+        $unexpectedTables = array_values(array_diff($actualTables, $expectedTables));
+
         return [
             'driver' => Database::driver(),
             'tables' => $tables,
+            'unexpected_tables' => $unexpectedTables,
             'relationships' => $relationships,
             'query_examples' => $this->databaseQueryExamples(),
             'normalization_notes' => [
@@ -1566,27 +1589,19 @@ final class Api
         $limit = filter_var($_GET['limit'] ?? 25, FILTER_VALIDATE_INT);
         $limit = $limit === false ? 25 : max(1, min(100, $limit));
         $columns = $this->databaseColumns($table);
-        $primaryKey = null;
-        foreach ($columns as $column) {
-            if ($column['is_primary_key']) {
-                $primaryKey = $column['column_name'];
-                break;
+        $previewAllowed = in_array($table, self::DATABASE_PREVIEW_TABLES, true);
+        $rows = [];
+        if ($previewAllowed) {
+            $primaryKey = null;
+            foreach ($columns as $column) {
+                if ($column['is_primary_key']) {
+                    $primaryKey = $column['column_name'];
+                    break;
+                }
             }
+            $orderBy = $primaryKey ? " ORDER BY {$primaryKey} DESC" : '';
+            $rows = $this->pdo->query("SELECT * FROM {$table}{$orderBy} LIMIT {$limit}")->fetchAll();
         }
-        $orderBy = $primaryKey ? " ORDER BY {$primaryKey} DESC" : '';
-        $rows = $this->pdo->query("SELECT * FROM {$table}{$orderBy} LIMIT {$limit}")->fetchAll();
-        foreach ($rows as &$row) {
-            if (array_key_exists('password_hash', $row)) {
-                $row['password_hash'] = '[已隱藏]';
-            }
-            if (array_key_exists('user_session_id', $row)) {
-                $row['user_session_id'] = '[已隱藏]';
-            }
-            if (array_key_exists('ip_hash', $row)) {
-                $row['ip_hash'] = '[已隱藏]';
-            }
-        }
-        unset($row);
         return [
             'table_name' => $table,
             'row_count' => (int) $this->pdo->query("SELECT COUNT(*) FROM {$table}")->fetchColumn(),
@@ -1594,6 +1609,7 @@ final class Api
             'rows' => $rows,
             'limit' => $limit,
             'read_only' => true,
+            'rows_hidden_for_privacy' => !$previewAllowed,
         ];
     }
 
@@ -1648,21 +1664,27 @@ final class Api
             [
                 'title' => 'JOIN：動作與主要部位',
                 'sql' => 'SELECT ev.exercise_name, bp.body_part_name, ev.difficulty_level, ev.equipment FROM exercises e JOIN exercise_versions ev ON ev.exercise_id=e.exercise_id JOIN body_parts bp ON bp.body_part_id=e.body_part_id WHERE e.is_active=TRUE AND ev.version_no=(SELECT MAX(v2.version_no) FROM exercise_versions v2 WHERE v2.exercise_id=e.exercise_id) ORDER BY bp.body_part_id, ev.exercise_name LIMIT 8;',
+                'preview_allowed' => true,
             ],
             [
                 'title' => 'GROUP BY：各部位動作數量',
                 'sql' => 'SELECT bp.body_part_name, COUNT(e.exercise_id) AS exercise_count, SUM(CASE WHEN e.is_active = TRUE THEN 1 ELSE 0 END) AS active_count FROM body_parts bp LEFT JOIN exercises e ON e.body_part_id = bp.body_part_id GROUP BY bp.body_part_id, bp.body_part_name ORDER BY bp.body_part_id;',
+                'preview_allowed' => true,
             ],
             [
                 'title' => 'Aggregate：完成場次的外加重量訓練量',
                 'sql' => "SELECT ev.exercise_name, COUNT(wset.workout_set_id) AS working_sets, COALESCE(SUM(wset.weight_kg * wset.reps),0) AS external_load_volume FROM workout_sets wset JOIN workout_session_exercises wse ON wse.workout_session_exercise_id=wset.workout_session_exercise_id JOIN workout_sessions ws ON ws.workout_session_id=wse.workout_session_id JOIN exercise_versions ev ON ev.exercise_version_id=wse.exercise_version_id WHERE ws.status='completed' GROUP BY ev.exercise_version_id, ev.exercise_name ORDER BY external_load_volume DESC LIMIT 8;",
+                'preview_allowed' => false,
             ],
         ];
         return array_map(function (array $definition): array {
             return [
                 'title' => $definition['title'],
                 'sql' => $definition['sql'],
-                'rows' => $this->pdo->query($definition['sql'])->fetchAll(),
+                'rows' => $definition['preview_allowed']
+                    ? $this->pdo->query($definition['sql'])->fetchAll()
+                    : [],
+                'rows_hidden_for_privacy' => !$definition['preview_allowed'],
             ];
         }, $definitions);
     }
@@ -1708,13 +1730,18 @@ final class Api
                 }
             }
             $current = $this->findExercise($exerciseId);
-            if (array_key_exists('body_part_id', $input)
-                && (int) $input['body_part_id'] !== (int) $current['body_part_id']) {
-                throw new ApiException(409, 'EXERCISE_IDENTITY_IMMUTABLE', '主訓練部位屬於動作身份；請新增動作並停用舊動作。');
+            if (array_key_exists('body_part_id', $input)) {
+                $requestedBodyPart = $this->strictInteger($input['body_part_id']);
+                if ($requestedBodyPart === false) {
+                    throw new ApiException(422, 'INVALID_BODY_PART', '身體部位 ID 必須是整數。');
+                }
+                if ($requestedBodyPart !== (int) $current['body_part_id']) {
+                    throw new ApiException(409, 'EXERCISE_IDENTITY_IMMUTABLE', '主訓練部位屬於動作身份；請新增動作並停用舊動作。');
+                }
             }
             $merged = array_merge($current, $input, ['body_part_id' => (int) $current['body_part_id']]);
             $imageChanged = array_key_exists('image_url', $input)
-                && (string) ($input['image_url'] ?? '') !== (string) ($current['image_url'] ?? '');
+                && ($this->optionalStringField($input, 'image_url') ?? '') !== (string) ($current['image_url'] ?? '');
             $values = $this->validateExerciseInput($merged, $imageChanged);
             $descriptive = ['exercise_name', 'difficulty_level', 'equipment', 'description', 'image_url'];
             $needsVersion = false;
@@ -1761,7 +1788,7 @@ final class Api
     private function updateReference(string $type, int $id, array $input): array
     {
         $description = array_key_exists('description', $input)
-            ? trim((string) $input['description'])
+            ? trim($this->requiredStringField($input, 'description'))
             : null;
         if ($description === null || mb_strlen($description) > 1000) {
             throw new ApiException(422, 'INVALID_DESCRIPTION', '說明不可超過 1,000 個字。');
@@ -1782,12 +1809,12 @@ final class Api
 
     private function validateExerciseInput(array $input, bool $requireHttpsImage): array
     {
-        $name = trim((string) ($input['exercise_name'] ?? ''));
+        $name = trim($this->requiredStringField($input, 'exercise_name'));
         $bodyPartId = $this->strictInteger($input['body_part_id'] ?? null);
-        $difficulty = (string) ($input['difficulty_level'] ?? '');
-        $equipment = trim((string) ($input['equipment'] ?? ''));
-        $description = trim((string) ($input['description'] ?? ''));
-        $imageUrl = trim((string) ($input['image_url'] ?? ''));
+        $difficulty = $this->requiredStringField($input, 'difficulty_level');
+        $equipment = trim($this->optionalStringField($input, 'equipment') ?? '');
+        $description = trim($this->requiredStringField($input, 'description'));
+        $imageUrl = trim($this->optionalStringField($input, 'image_url') ?? '');
         $activeValue = $input['is_active'] ?? true;
         $active = is_bool($activeValue)
             ? $activeValue
@@ -2013,6 +2040,9 @@ final class Api
 
     private function decimal(mixed $value, bool $allowZero): float|false
     {
+        if (is_bool($value) || (!is_string($value) && !is_int($value) && !is_float($value))) {
+            return false;
+        }
         if (is_float($value) || is_int($value)) {
             $value = rtrim(rtrim(number_format((float) $value, 10, '.', ''), '0'), '.');
         }
@@ -2022,6 +2052,29 @@ final class Api
         }
         $number = (float) $text;
         return !$allowZero && $number <= 0 ? false : $number;
+    }
+
+    private function requiredStringField(array $input, string $field): string
+    {
+        if (!array_key_exists($field, $input) || !is_string($input[$field])) {
+            throw new ApiException(422, 'INVALID_FIELD_TYPE', "{$field} 必須是字串。", [], [
+                $field => '必須是字串。',
+            ]);
+        }
+        return $input[$field];
+    }
+
+    private function optionalStringField(array $input, string $field): ?string
+    {
+        if (!array_key_exists($field, $input) || $input[$field] === null) {
+            return null;
+        }
+        if (!is_string($input[$field])) {
+            throw new ApiException(422, 'INVALID_FIELD_TYPE', "{$field} 必須是字串。", [], [
+                $field => '必須是字串。',
+            ]);
+        }
+        return $input[$field];
     }
 
     private function requireAdmin(array $user): void
@@ -2055,13 +2108,15 @@ final class Api
 
     private function tableCount(): int
     {
+        $names = "'" . implode("','", self::DATABASE_TABLES) . "'";
         if (Database::driver() === 'sqlite') {
             return (int) $this->pdo->query(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ({$names})"
             )->fetchColumn();
         }
         return (int) $this->pdo->query(
-            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'"
+            "SELECT COUNT(*) FROM information_schema.tables "
+            . "WHERE table_schema='public' AND table_name IN ({$names})"
         )->fetchColumn();
     }
 }

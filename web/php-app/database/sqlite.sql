@@ -102,7 +102,7 @@ CREATE TABLE planning_profiles (
     experience_snapshot TEXT NOT NULL CHECK (experience_snapshot IN ('Beginner', 'Intermediate', 'Advanced')),
     training_days_per_week INTEGER NOT NULL CHECK (training_days_per_week BETWEEN 2 AND 6),
     duration_minutes INTEGER NOT NULL CHECK (duration_minutes IN (30, 60, 90)),
-    algorithm_version TEXT NOT NULL DEFAULT 'rules-v2-randomized',
+    algorithm_version TEXT NOT NULL DEFAULT 'rules-v1',
     captured_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE planning_profile_body_parts (
@@ -194,6 +194,17 @@ WHEN EXISTS (
 )
 BEGIN SELECT RAISE(ABORT, 'the same exercise identity cannot appear twice on one plan day'); END;
 
+CREATE TRIGGER trg_plan_exercise_identity_update BEFORE UPDATE OF plan_day_id, exercise_version_id ON plan_exercises
+WHEN EXISTS (
+    SELECT 1 FROM plan_exercises other
+    JOIN exercise_versions ov ON ov.exercise_version_id = other.exercise_version_id
+    JOIN exercise_versions nv ON nv.exercise_version_id = NEW.exercise_version_id
+    WHERE other.plan_day_id = NEW.plan_day_id
+      AND other.plan_exercise_id <> NEW.plan_exercise_id
+      AND ov.exercise_id = nv.exercise_id
+)
+BEGIN SELECT RAISE(ABORT, 'the same exercise identity cannot appear twice on one plan day'); END;
+
 CREATE TRIGGER trg_session_exercise_snapshot_insert BEFORE INSERT ON workout_session_exercises
 WHEN NOT EXISTS (
     SELECT 1 FROM workout_session_plans wsp
@@ -212,6 +223,17 @@ WHEN EXISTS (SELECT 1 FROM users WHERE user_id = OLD.user_id AND profile_complet
  AND (SELECT COUNT(*) FROM body_records WHERE user_id = OLD.user_id) <= 1
 BEGIN SELECT RAISE(ABORT, 'a completed profile must retain at least one body record'); END;
 
+CREATE TRIGGER trg_body_records_keep_last_owner BEFORE UPDATE OF user_id ON body_records
+WHEN OLD.user_id <> NEW.user_id
+ AND EXISTS (SELECT 1 FROM users WHERE user_id = OLD.user_id AND profile_completed_at IS NOT NULL)
+ AND (SELECT COUNT(*) FROM body_records WHERE user_id = OLD.user_id) <= 1
+BEGIN SELECT RAISE(ABORT, 'a completed profile must retain at least one body record'); END;
+
+CREATE TRIGGER trg_users_completed_profile_weight BEFORE UPDATE OF profile_completed_at ON users
+WHEN NEW.profile_completed_at IS NOT NULL
+ AND NOT EXISTS (SELECT 1 FROM body_records WHERE user_id = NEW.user_id)
+BEGIN SELECT RAISE(ABORT, 'a completed profile must retain at least one body record'); END;
+
 CREATE TRIGGER trg_completed_session_has_set BEFORE UPDATE OF status ON workout_sessions
 WHEN NEW.status = 'completed' AND NOT EXISTS (
     SELECT 1 FROM workout_sets ws
@@ -219,6 +241,10 @@ WHEN NEW.status = 'completed' AND NOT EXISTS (
     WHERE wse.workout_session_id = NEW.workout_session_id
 )
 BEGIN SELECT RAISE(ABORT, 'a completed workout session must contain at least one set'); END;
+
+CREATE TRIGGER trg_completed_session_insert_has_set BEFORE INSERT ON workout_sessions
+WHEN NEW.status = 'completed'
+BEGIN SELECT RAISE(ABORT, 'a completed workout session must be created in progress before completion'); END;
 
 CREATE TRIGGER trg_completed_session_keep_set BEFORE DELETE ON workout_sets
 WHEN EXISTS (

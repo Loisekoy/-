@@ -115,7 +115,7 @@ final class PlanGenerator
                 'INSERT INTO planning_profiles '
                 . '(workout_plan_id, training_goal_id, age_snapshot, height_cm_snapshot, weight_kg_snapshot, '
                 . 'weight_record_date, experience_snapshot, training_days_per_week, duration_minutes, algorithm_version) '
-                . "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'rules-v2-randomized')"
+                . "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'rules-v1')"
             )->execute([
                 $planId,
                 (int) $user['training_goal_id'],
@@ -135,8 +135,6 @@ final class PlanGenerator
             }
 
             $coveredBodyParts = [];
-            $recentExerciseIds = self::recentExerciseIds($pdo, $userId);
-            $usedExerciseIds = [];
             foreach ($split as $dayIndex => [$title, $parts]) {
                 $orderedParts = array_values(array_unique(array_merge(
                     array_values(array_intersect($preferences, $parts)),
@@ -146,9 +144,7 @@ final class PlanGenerator
                     $pdo,
                     $orderedParts,
                     (string) $user['training_experience'],
-                    $exerciseLimit,
-                    $usedExerciseIds,
-                    $recentExerciseIds
+                    $exerciseLimit
                 );
                 if (count($exercises) < min(3, $exerciseLimit)) {
                     throw new ApiException(409, 'PLAN_CONSTRAINT_UNSATISFIED', '可用動作不足，請聯絡管理員新增或啟用動作。');
@@ -166,7 +162,6 @@ final class PlanGenerator
                 );
                 foreach ($exercises as $exerciseIndex => $exercise) {
                     $coveredBodyParts[(string) $exercise['body_part_name']] = true;
-                    $usedExerciseIds[(int) $exercise['exercise_id']] = true;
                     $insertExercise->execute([
                         $planDayId,
                         (int) $exercise['exercise_version_id'],
@@ -293,7 +288,10 @@ final class PlanGenerator
                     || array_diff(array_keys($requestedDay), ['day_title', 'exercises']) !== []) {
                     throw new ApiException(422, 'INVALID_PLAN_DAYS', '自訂訓練日格式不正確。');
                 }
-                $dayTitle = trim((string) ($requestedDay['day_title'] ?? ''));
+                if (!is_string($requestedDay['day_title'] ?? null)) {
+                    throw new ApiException(422, 'INVALID_DAY_TITLE', '每個訓練日名稱必須是字串。');
+                }
+                $dayTitle = trim($requestedDay['day_title']);
                 if ($dayTitle === '' || mb_strlen($dayTitle) > 100) {
                     throw new ApiException(422, 'INVALID_DAY_TITLE', '每個訓練日名稱需為 1 至 100 個字。');
                 }
@@ -349,14 +347,17 @@ final class PlanGenerator
         }
     }
 
-    public static function listPlans(PDO $pdo, int $userId): array
+    public static function listPlans(PDO $pdo, int $userId, int $limit = 20, int $offset = 0): array
     {
         $statement = $pdo->prepare(
             'SELECT workout_plan_id FROM workout_plans '
             . 'WHERE user_id = ? AND archived_at IS NULL '
-            . 'ORDER BY created_at DESC, workout_plan_id DESC'
+            . 'ORDER BY created_at DESC, workout_plan_id DESC LIMIT ? OFFSET ?'
         );
-        $statement->execute([$userId]);
+        $statement->bindValue(1, $userId, PDO::PARAM_INT);
+        $statement->bindValue(2, $limit, PDO::PARAM_INT);
+        $statement->bindValue(3, $offset, PDO::PARAM_INT);
+        $statement->execute();
         return array_map(
             static fn (int|string $id): array => self::findPlan($pdo, $userId, (int) $id),
             $statement->fetchAll(PDO::FETCH_COLUMN)
@@ -405,9 +406,7 @@ final class PlanGenerator
         PDO $pdo,
         array $parts,
         string $experience,
-        int $limit,
-        array $alreadyPicked,
-        array $recentlyUsed
+        int $limit
     ): array
     {
         $rank = ['Beginner' => 1, 'Intermediate' => 2, 'Advanced' => 3][$experience] ?? 1;
@@ -431,26 +430,6 @@ final class PlanGenerator
         foreach ($rows as $row) {
             $grouped[$row['body_part_name']][] = $row;
         }
-        foreach ($grouped as &$items) {
-            $fresh = [];
-            $recent = [];
-            $repeated = [];
-            foreach ($items as $item) {
-                $exerciseId = (int) $item['exercise_id'];
-                if (isset($alreadyPicked[$exerciseId])) {
-                    $repeated[] = $item;
-                } elseif (isset($recentlyUsed[$exerciseId])) {
-                    $recent[] = $item;
-                } else {
-                    $fresh[] = $item;
-                }
-            }
-            shuffle($fresh);
-            shuffle($recent);
-            shuffle($repeated);
-            $items = array_merge($fresh, $recent, $repeated);
-        }
-        unset($items);
         $picked = [];
         $seen = [];
         foreach ($parts as $part) {
@@ -487,25 +466,6 @@ final class PlanGenerator
             }
         }
         return $picked;
-    }
-
-    /** @return array<int, true> */
-    private static function recentExerciseIds(PDO $pdo, int $userId): array
-    {
-        $statement = $pdo->prepare(
-            'SELECT DISTINCT ev.exercise_id FROM plan_exercises pe '
-            . 'JOIN exercise_versions ev ON ev.exercise_version_id = pe.exercise_version_id '
-            . 'JOIN plan_days pd ON pd.plan_day_id = pe.plan_day_id '
-            . 'WHERE pd.workout_plan_id IN ('
-            . 'SELECT workout_plan_id FROM workout_plans WHERE user_id = ? '
-            . 'ORDER BY created_at DESC, workout_plan_id DESC LIMIT 3)'
-        );
-        $statement->execute([$userId]);
-        $ids = [];
-        foreach ($statement->fetchAll(PDO::FETCH_COLUMN) as $exerciseId) {
-            $ids[(int) $exerciseId] = true;
-        }
-        return $ids;
     }
 
     private static function integerValue(mixed $value): ?int

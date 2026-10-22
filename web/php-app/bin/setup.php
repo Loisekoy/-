@@ -30,6 +30,8 @@ if (Database::driver() === 'pgsql') {
 $goalCount = (int) $pdo->query('SELECT COUNT(*) FROM training_goals')->fetchColumn();
 if ($goalCount === 0) {
     Seeder::seed($pdo);
+} else {
+    Seeder::ensureDemoAccounts($pdo);
 }
 $exerciseDescriptionUpdates = Seeder::syncBundledExerciseDescriptions($pdo);
 if ($exerciseDescriptionUpdates > 0) {
@@ -42,16 +44,29 @@ $adminAuthStatement = $pdo->prepare(
 );
 $adminAuthStatement->execute(['admin@fittrack.local']);
 $adminAuth = $adminAuthStatement->fetch(PDO::FETCH_ASSOC);
-if ($adminAuth === false && strlen($adminPassword) < 8) {
-    throw new RuntimeException('全新資料庫首次建立管理員時，請在環境變數 DEMO_ADMIN_PASSWORD 設定至少 8 個字元的管理員密碼。');
+if ($adminAuth === false && !Seeder::validPassword($adminPassword)) {
+    throw new RuntimeException('全新資料庫首次建立管理員時，密碼必須符合 10 至 72 bytes、英文與數字的安全規則。');
 }
-if ($adminAuth !== false && $adminPassword !== '' && strlen($adminPassword) < 8) {
-    throw new RuntimeException('若要更新既有管理員密碼，DEMO_ADMIN_PASSWORD 必須至少 8 個字元。');
+if ($adminAuth !== false && $adminPassword !== '' && !Seeder::validPassword($adminPassword)) {
+    throw new RuntimeException('若要更新既有管理員密碼，DEMO_ADMIN_PASSWORD 必須符合 10 至 72 bytes、英文與數字的安全規則。');
 }
 if ($adminAuth !== false && $adminPassword !== '' && !password_verify($adminPassword, (string) $adminAuth['password_hash'])) {
     $pdo->prepare('UPDATE user_auth SET password_hash = ? WHERE user_id = ?')->execute([
         password_hash($adminPassword, PASSWORD_BCRYPT, ['cost' => 10]),
         (int) $adminAuth['user_id'],
+    ]);
+}
+$demoPassword = (string) (Config::get('DEMO_BOOTSTRAP_PASSWORD', 'Demo123456') ?? '');
+$demoAuthStatement = $pdo->prepare('SELECT auth_id, password_hash FROM user_auth WHERE email = ?');
+$demoAuthStatement->execute(['demo@fittrack.local']);
+$demoAuth = $demoAuthStatement->fetch(PDO::FETCH_ASSOC);
+if ($demoAuth !== false && !Seeder::validPassword($demoPassword)) {
+    throw new RuntimeException('DEMO_BOOTSTRAP_PASSWORD 必須符合 10 至 72 bytes、英文與數字的安全規則。');
+}
+if ($demoAuth !== false && !password_verify($demoPassword, (string) $demoAuth['password_hash'])) {
+    $pdo->prepare('UPDATE user_auth SET password_hash = ? WHERE auth_id = ?')->execute([
+        password_hash($demoPassword, PASSWORD_BCRYPT, ['cost' => 10]),
+        (int) $demoAuth['auth_id'],
     ]);
 }
 $demoUserId = (int) $pdo->query(

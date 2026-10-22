@@ -9,7 +9,7 @@
 - 動作資料庫、不可變動作版本、管理員新增／修改／停用
 - 本機資料集 1,324 筆動作、JPG 與 GIF 可重跑匯入，動作庫提供搜尋、篩選與分頁
 - 使用者可自行安排 2 至 6 個訓練日，從完整動作庫挑選動作並設定順序、組數、次數與休息時間
-- 電腦規劃保留目標、程度、偏好部位、時間與八部位覆蓋規則，並優先避開最近三份課表及同一份課表的重複動作
+- 電腦規劃保留目標、程度、偏好部位、時間與八部位覆蓋規則，依難度與動作 ID 固定排序，確保相同輸入可重現
 - OpenAI 相容模型接口保留於後端，模型不可用時不影響自己規劃與電腦規劃
 - 課表模板、規劃輸入快照、開始／繼續／完成／取消訓練
 - 總訓練時間由場次開始時間持續計算；休息倒數只在成功儲存一組後啟動
@@ -42,7 +42,7 @@ php -S 127.0.0.1:8080 -t public public/router.php
 
 開啟 `http://127.0.0.1:8080`。本機示範帳號：
 
-- 會員：`demo@fittrack.local` / `Demo12345`
+- 會員：`demo@fittrack.local` / `Demo123456`
 - 管理員密碼請在本機 `.env` 設定 `DEMO_ADMIN_PASSWORD`；不會顯示在網站或提交到 Git。
 
 ## 動作資料匯入
@@ -83,11 +83,13 @@ php bin/setup.php
 php bin/migrate.php
 ```
 
-Migration 檔案為 `database/migrations/20261006_teacher_review_v1_1.sql`。正式執行前必須先備份；Migration 會在交易內進行先備條件檢查與資料回填，失敗即回滾。
+Migration 會依序執行 `database/migrations/20261006_teacher_review_v1_1.sql` 與
+`database/migrations/20261022_srs_conformance.sql`。正式執行前必須先備份；Migration
+會在交易內進行先備條件檢查與資料回填，失敗即回滾。
 
 ## 過期資料清理
 
-`bin/cleanup-expired.php` 每批最多刪除 500 筆過期 `user_sessions`，並清理超過 15 分鐘的 `login_failures`。正式環境由 GitHub Actions 的 `.github/workflows/fittrack-maintenance.yml` 每日台北時間 03:17 執行，不需另外購買 Render Cron Service。排程日誌只記錄刪除筆數、執行時間與時區，不輸出 Token、雜湊或連線字串。
+`bin/cleanup-expired.php` 每批最多刪除 500 筆過期 `user_sessions`，並清理超過 15 分鐘的 `login_failures`。正式環境由 GitHub Actions 的 `.github/workflows/fittrack-maintenance.yml` 每日台北時間 03:00 執行，不需另外購買 Render Cron Service。排程日誌只記錄刪除筆數、執行時間與時區，不輸出 Token、雜湊或連線字串。
 
 ## 每日備份與還原驗證
 
@@ -105,7 +107,8 @@ Migration 檔案為 `database/migrations/20261006_teacher_review_v1_1.sql`。正
 ```bash
 php tests/smoke.php
 php tests/sqlite_migration.php
-php tests/cleanup_expired.php
+php tests/srs_conformance.php
+DEMO_ADMIN_PASSWORD='CleanupAdmin123' php tests/cleanup_expired.php
 php tests/admin_bootstrap.php
 php tests/ui_contract.php
 php bin/verify-media-manifest.php
@@ -125,6 +128,6 @@ DATABASE_URL='postgresql://.../fittrack_test' FITTRACK_TEST_DATABASE=1 php tests
 
 必要值：`DATABASE_URL`、`SECRET_KEY`、`RATE_LIMIT_SECRET`、`DEMO_BOOTSTRAP_PASSWORD`。全新資料庫首次建立管理員時，才需要設定 `DEMO_ADMIN_PASSWORD`；已有管理員資料時可留白，啟動程序會保留資料庫原本的密碼，不會自行產生或替換密碼。正式環境的 `DATABASE_URL` 必須使用 `sslmode=require`、`verify-ca` 或 `verify-full`；不加密的 PostgreSQL 連線會直接拒絕啟動。`TRUSTED_PROXY_IPS` 僅能列出自己控制的 Reverse Proxy；未設定時不信任 `X-Forwarded-For`。AI 相關變數為選填。
 
-根目錄的 `render.yaml` 建立 Render Docker Web Service，並由 Render 產生 `SECRET_KEY`、`RATE_LIMIT_SECRET`。`DATABASE_URL` 與 `DEMO_ADMIN_PASSWORD` 使用 `sync: false`，由 Render Dashboard 安全設定，不會被 Blueprint 覆寫或寫入 Git。若資料庫已有管理員且 Render 沒有設定 `DEMO_ADMIN_PASSWORD`，每次啟動會保留原密碼；若要主動輪替密碼，才需私下填入該變數。`AI_API_KEY`、`AI_MODEL` 預設保持空白，因此不會阻擋核心功能部署；要啟用 AI 規劃時，請在 Render 的 Environment 頁面同時填入這兩個值，金鑰不可寫進 Git。
+根目錄的 `render.yaml` 建立 Render Docker Web Service，並由 Render 產生 `SECRET_KEY`、`RATE_LIMIT_SECRET`。`DATABASE_URL` 與 `DEMO_ADMIN_PASSWORD` 使用 `sync: false`，由 Render Dashboard 安全設定，不會被 Blueprint 覆寫或寫入 Git。若資料庫已有管理員且 Render 沒有設定 `DEMO_ADMIN_PASSWORD`，每次啟動會保留原密碼；若要主動輪替密碼，才需私下填入該變數。LLM 排課不屬於首版範圍，`AI_FEATURE_ENABLED=false` 且 `AI_API_KEY`、`AI_MODEL` 預設空白；日後要擴充時才於 Render 私下設定金鑰、模型並明確啟用旗標。
 
-本次 72 頁規格書的本機實作狀態請見 `../docs/validation/IMPLEMENTATION_STATUS_2026-10-14.md`；完整架構、ERD 與資料字典位於 `../output/specification/`。
+本次 72 頁規格書以根目錄 `參考資料/Fitness_Tracking_Management_System_SRS.pdf` 為準；程式化的資料表與外鍵對照位於 `docs/schema_manifest.json`。

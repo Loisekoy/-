@@ -49,6 +49,7 @@ final class Database
                 self::options()
             );
             self::$pdo->exec('SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED');
+            self::$pdo->exec("SET TIME ZONE 'Asia/Taipei'");
         } elseif ($databaseUrl && str_starts_with($databaseUrl, 'pgsql:')) {
             self::$pdo = new PDO(
                 $databaseUrl,
@@ -57,6 +58,7 @@ final class Database
                 self::options()
             );
             self::$pdo->exec('SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED');
+            self::$pdo->exec("SET TIME ZONE 'Asia/Taipei'");
         } else {
             $sqlitePath = Config::get('SQLITE_PATH', Config::root() . '/storage/app.sqlite');
             if ($sqlitePath === null) {

@@ -7,6 +7,8 @@ putenv('APP_ENV=test');
 putenv('SQLITE_PATH=' . $databasePath);
 putenv('SECRET_KEY=cleanup-test-secret');
 putenv('RATE_LIMIT_SECRET=cleanup-test-rate-secret');
+putenv('DEMO_ADMIN_PASSWORD=CleanupAdmin123');
+putenv('DEMO_BOOTSTRAP_PASSWORD=CleanupDemo123');
 
 require dirname(__DIR__) . '/src/bootstrap.php';
 

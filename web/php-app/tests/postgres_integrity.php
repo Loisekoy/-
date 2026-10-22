@@ -73,14 +73,23 @@ function createPreparedUser(PDO $pdo, string $suffix): array
     $userId = (int) Auth::user($pdo, (string) $registered['access_token'])['user_id'];
     $goalId = (int) $pdo->query('SELECT training_goal_id FROM training_goals ORDER BY training_goal_id LIMIT 1')->fetchColumn();
     $partId = (int) $pdo->query('SELECT body_part_id FROM body_parts ORDER BY body_part_id LIMIT 1')->fetchColumn();
-    $pdo->prepare(
-        "UPDATE users SET age=22, height_cm=168.00, training_experience='Beginner', "
-        . 'training_goal_id=?, training_days_per_week=2, training_duration_minutes=60, '
-        . 'profile_completed_at=CURRENT_TIMESTAMP WHERE user_id=?'
-    )->execute([$goalId, $userId]);
-    $pdo->prepare('INSERT INTO user_body_parts (user_id, body_part_id) VALUES (?, ?)')->execute([$userId, $partId]);
-    $pdo->prepare('INSERT INTO body_records (user_id, record_date, weight_kg) VALUES (?, CURRENT_DATE, 65.25)')
-        ->execute([$userId]);
+    Database::beginTransaction($pdo);
+    try {
+        $pdo->prepare(
+            "UPDATE users SET age=22, height_cm=168.00, training_experience='Beginner', "
+            . 'training_goal_id=?, training_days_per_week=2, training_duration_minutes=60 '
+            . 'WHERE user_id=?'
+        )->execute([$goalId, $userId]);
+        $pdo->prepare('INSERT INTO user_body_parts (user_id, body_part_id) VALUES (?, ?)')->execute([$userId, $partId]);
+        $pdo->prepare('INSERT INTO body_records (user_id, record_date, weight_kg) VALUES (?, CURRENT_DATE, 65.25)')
+            ->execute([$userId]);
+        $pdo->prepare('UPDATE users SET profile_completed_at=CURRENT_TIMESTAMP WHERE user_id=?')
+            ->execute([$userId]);
+        $pdo->commit();
+    } catch (Throwable $error) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $error;
+    }
     $plan = PlanGenerator::generate($pdo, $userId, 'PostgreSQL Integrity Plan');
     return ['user_id' => $userId, 'plan_day_id' => (int) $plan['days'][0]['plan_day_id']];
 }
@@ -142,6 +151,13 @@ try {
 
     $prepared = createPreparedUser($pdo, $suffix);
     $createdUserIds[] = $prepared['user_id'];
+    $algorithm = $pdo->prepare(
+        'SELECT pp.algorithm_version FROM planning_profiles pp '
+        . 'JOIN workout_plans wp ON wp.workout_plan_id = pp.workout_plan_id '
+        . 'WHERE wp.user_id = ? ORDER BY wp.workout_plan_id DESC LIMIT 1'
+    );
+    $algorithm->execute([$prepared['user_id']]);
+    checkPg($algorithm->fetchColumn() === 'rules-v1', 'PostgreSQL 規則式課表使用可重現的 rules-v1');
     [$status, $session] = invokeStart($pdo, $prepared['user_id'], $prepared['plan_day_id']);
     checkPg($status === 201 && count($session['exercises']) > 0, '開始訓練時建立場次動作快照');
     $sessionId = (int) $session['workout_session_id'];
@@ -189,6 +205,38 @@ try {
         checkPg(false, '完整 Profile 的最後一筆體重不應被刪除');
     } catch (PDOException $error) {
         checkPg($error->getCode() === '23514', '資料庫阻止刪除完整 Profile 的最後一筆體重');
+    }
+
+    $invariantRegistration = Auth::register($pdo, [
+        'name' => 'PostgreSQL Invariant ' . $suffix,
+        'email' => 'pg-invariant-' . $suffix . '@fittrack.test',
+        'password' => 'InvariantPass123',
+    ]);
+    $invariantUserId = (int) Auth::user($pdo, (string) $invariantRegistration['access_token'])['user_id'];
+    $createdUserIds[] = $invariantUserId;
+    try {
+        $pdo->prepare('UPDATE users SET profile_completed_at=CURRENT_TIMESTAMP WHERE user_id=?')
+            ->execute([$invariantUserId]);
+        checkPg(false, '無體重的 Profile 不得設為完成');
+    } catch (PDOException $error) {
+        checkPg($error->getCode() === '23514', '延遲 Constraint Trigger 拒絕無體重的完成 Profile');
+    }
+    try {
+        $pdo->prepare('UPDATE body_records SET user_id=? WHERE body_record_id=?')
+            ->execute([$invariantUserId, $bodyRecordId]);
+        checkPg(false, '不得移走已完成 Profile 的最後體重');
+    } catch (PDOException $error) {
+        checkPg($error->getCode() === '23514', '延遲 Constraint Trigger 拒絕移走最後體重');
+    }
+
+    try {
+        $pdo->prepare(
+            "INSERT INTO workout_sessions (user_id, status, started_at, ended_at) "
+            . "VALUES (?, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        )->execute([$prepared['user_id']]);
+        checkPg(false, '不得直接建立空的 completed 場次');
+    } catch (PDOException $error) {
+        checkPg($error->getCode() === '23514', '延遲 Constraint Trigger 拒絕直接建立空的 completed 場次');
     }
 
     $concurrent = createPreparedUser($pdo, $suffix . '-concurrent');
